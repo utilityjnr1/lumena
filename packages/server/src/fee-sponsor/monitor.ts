@@ -1,4 +1,6 @@
 import type { StellarClient } from "@lumen/core";
+import { logger } from "../logger.js";
+import { sponsorBalanceXlm } from "../metrics.js";
 
 export interface SponsorMonitorOpts {
   client: StellarClient;
@@ -56,16 +58,19 @@ export class SponsorMonitorService {
       const balance = nativeBalanceLine ? parseFloat(nativeBalanceLine.balance) : 0;
       const isLow = balance < this.minBalanceXlm;
 
+      sponsorBalanceXlm.set(balance);
+
       if (isLow) {
-        console.warn(
-          `[SponsorMonitorService] WARNING: Sponsor account ${this.sponsorPublicKey} balance (${balance} XLM) is below minimum threshold (${this.minBalanceXlm} XLM)`
+        logger.warn(
+          { sponsorPublicKey: this.sponsorPublicKey, balance, minBalanceXlm: this.minBalanceXlm },
+          `Sponsor account balance (${balance} XLM) is below minimum threshold (${this.minBalanceXlm} XLM)`
         );
 
         if (this.onLowBalance) {
           try {
             await this.onLowBalance(balance, this.minBalanceXlm);
           } catch (err) {
-            console.error("[SponsorMonitorService] Error executing onLowBalance alert callback:", err);
+            logger.error({ err }, "[SponsorMonitorService] Error executing onLowBalance alert callback");
           }
         }
 
@@ -83,14 +88,14 @@ export class SponsorMonitorService {
               }),
             });
           } catch (err) {
-            console.error("[SponsorMonitorService] Failed to send webhook alert:", err);
+            logger.error({ err }, "[SponsorMonitorService] Failed to send webhook alert");
           }
         }
       }
 
       return { balance, isLow, threshold: this.minBalanceXlm };
     } catch (error) {
-      console.error(`[SponsorMonitorService] Error loading sponsor account ${this.sponsorPublicKey}:`, error);
+      logger.error({ error, sponsorPublicKey: this.sponsorPublicKey }, "[SponsorMonitorService] Error loading sponsor account");
       throw error;
     }
   }

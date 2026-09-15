@@ -24,6 +24,13 @@ import {
   errorHandler,
   wrapHandler,
 } from "./errors.js";
+import { logger, httpLogger } from "./logger.js";
+import {
+  register,
+  cosignRequestsTotal,
+  feeBumpRequestsTotal,
+  policyEvaluationDurationSeconds,
+} from "./metrics.js";
 
 import { SponsorMonitorService } from "./fee-sponsor/monitor.js";
 
@@ -86,7 +93,15 @@ export function createServer(opts: ServerOpts): ServerResult {
   });
 
   const app = express();
+  app.use(httpLogger);
   app.use(express.json());
+
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.id) {
+      res.setHeader("x-request-id", req.id as string);
+    }
+    next();
+  });
 
   app.use("/docs", swaggerUi.serve, swaggerUi.setup(openApiSpec));
 
@@ -100,9 +115,27 @@ export function createServer(opts: ServerOpts): ServerResult {
     next();
   });
 
-  app.get("/health", (_req, res) => {
-    res.json({ status: "ok", network: client.config.network });
-  });
+  app.get("/health", wrapHandler(async (_req, res) => {
+    let horizonConnected = false;
+    try {
+      await client.horizon.server.fetchTime();
+      horizonConnected = true;
+    } catch {
+      horizonConnected = false;
+    }
+
+    res.json({
+      status: "ok",
+      horizonConnected,
+      network: client.config.network,
+      version: "0.1.0",
+    });
+  }));
+
+  app.get("/metrics", wrapHandler(async (_req: Request, res: Response) => {
+    res.setHeader("Content-Type", register.contentType);
+    res.send(await register.metrics());
+  }));
 
   app.get("/sponsor/status", wrapHandler(async (_req: Request, res: Response) => {
     const status = await sponsorMonitorService.checkBalance();
@@ -110,21 +143,35 @@ export function createServer(opts: ServerOpts): ServerResult {
   }));
 
   app.post("/cosign", wrapHandler(async (req: Request, res: Response) => {
-    const parsed = CosignRequestSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError("Validation failed", parsed.error.flatten().fieldErrors);
+    const timer = policyEvaluationDurationSeconds.startTimer();
+    try {
+      const parsed = CosignRequestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        cosignRequestsTotal.inc({ status: "rejected" });
+        throw new ValidationError("Validation failed", parsed.error.flatten().fieldErrors);
+      }
+
+      const result = await cosignerService.cosign(parsed.data);
+
+      if (!result.approved) {
+        cosignRequestsTotal.inc({ status: "rejected" });
+        throw new PolicyError(result.reason ?? "Transaction denied by policy");
+      }
+
+      cosignRequestsTotal.inc({ status: "approved" });
+      res.json({ signedXdr: result.signedXdr });
+    } catch (err) {
+      if (!(err instanceof ValidationError) && !(err instanceof PolicyError)) {
+        cosignRequestsTotal.inc({ status: "rejected" });
+      }
+      throw err;
+    } finally {
+      timer();
     }
-
-    const result = await cosignerService.cosign(parsed.data);
-
-    if (!result.approved) {
-      throw new PolicyError(result.reason ?? "Transaction denied by policy");
-    }
-
-    res.json({ signedXdr: result.signedXdr });
   }));
 
   app.post("/fee-bump", wrapHandler(async (req: Request, res: Response) => {
+    feeBumpRequestsTotal.inc();
     const parsed = FeeBumpRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       throw new ValidationError("Validation failed", parsed.error.flatten().fieldErrors);
@@ -135,6 +182,7 @@ export function createServer(opts: ServerOpts): ServerResult {
   }));
 
   app.post("/fee-bump/submit", wrapHandler(async (req: Request, res: Response) => {
+    feeBumpRequestsTotal.inc();
     const parsed = FeeBumpRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       throw new ValidationError("Validation failed", parsed.error.flatten().fieldErrors);
@@ -190,23 +238,21 @@ export function createServer(opts: ServerOpts): ServerResult {
   const server = createHttpServer(app);
 
   server.listen(port, () => {
-    console.log(`Lumen server listening on port ${port}`);
-    console.log(`Network: ${client.config.network}`);
-    console.log(`Cosigner: ${opts.cosignerSigner.publicKey()}`);
-    console.log(`Fee payer: ${opts.feePayerSigner.publicKey()}`);
+    logger.info({ port, network: client.config.network }, `Lumen server listening on port ${port}`);
+    logger.info({ cosigner: opts.cosignerSigner.publicKey(), feePayer: opts.feePayerSigner.publicKey() }, "Signer addresses initialized");
   });
 
   const gracefulShutdown = (signal: string) => {
-    console.log(`${signal} received, shutting down gracefully`);
+    logger.info({ signal }, `${signal} received, shutting down gracefully`);
     sponsorMonitorService.stop();
 
     server.close(() => {
-      console.log("HTTP server closed");
+      logger.info("HTTP server closed");
       process.exit(0);
     });
 
     const timeout = setTimeout(() => {
-      console.error("Forced shutdown after timeout");
+      logger.error("Forced shutdown after timeout");
       process.exit(1);
     }, 30000);
 
@@ -215,7 +261,7 @@ export function createServer(opts: ServerOpts): ServerResult {
         clearInterval(checkInterval);
         clearTimeout(timeout);
         server.close(() => {
-          console.log("HTTP server closed");
+          logger.info("HTTP server closed");
           process.exit(0);
         });
       }

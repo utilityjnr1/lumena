@@ -1,5 +1,13 @@
-import { Keypair, Asset } from "@stellar/stellar-sdk";
-import { StellarClient, Wallet, KNOWN_ASSETS, Sep41Token } from "@lumen/core";
+import { Keypair, Asset, TransactionBuilder } from "@stellar/stellar-sdk";
+import {
+  StellarClient,
+  Wallet,
+  KNOWN_ASSETS,
+  Sep41Token,
+  PasskeyManager,
+  type PasskeyRegistrationOpts,
+  type PasskeyAssertionOpts,
+} from "@lumen/core";
 import type { StellarNetwork } from "@lumen/types";
 
 export interface LumenClientOpts {
@@ -15,6 +23,13 @@ export interface SessionKeyInfo {
   publicKey: string;
   secretKey: string;
   expiresAt: number;
+}
+
+export interface PasskeyWalletResult {
+  address: string;
+  id: string;
+  credentialId: string;
+  keypair: Keypair;
 }
 
 export function createSessionKey(durationSeconds: number = 3600): SessionKeyInfo {
@@ -61,6 +76,49 @@ export class LumenClient {
     this.wallets.set(id, wallet);
 
     return { address, id };
+  }
+
+  async createWalletWithPasskey(opts?: PasskeyRegistrationOpts): Promise<PasskeyWalletResult> {
+    const passkeyManager = new PasskeyManager();
+    const username = opts?.username ?? `user-${Date.now()}`;
+    const { credentialId, keypair } = await passkeyManager.registerPasskey({
+      username,
+      rpName: opts?.rpName,
+      challenge: opts?.challenge,
+    });
+
+    const wallet = new Wallet({
+      client: this.client,
+      sponsorKeypair: this.sponsorKeypair,
+      serverPublicKey: this.serverPublicKey,
+      ownerKeypair: keypair,
+    });
+
+    const { address } = await wallet.create();
+    const id = address;
+    this.wallets.set(id, wallet);
+
+    return { address, id, credentialId, keypair };
+  }
+
+  async signWithPasskey(opts: {
+    credentialId?: string;
+    transactionXdr: string;
+    username?: string;
+  }): Promise<{ signedXdr: string; publicKey: string }> {
+    const passkeyManager = new PasskeyManager();
+    const { keypair } = await passkeyManager.authenticatePasskey({
+      credentialId: opts.credentialId,
+      username: opts.username,
+    });
+
+    const tx = TransactionBuilder.fromXDR(opts.transactionXdr, this.client.networkPassphrase);
+    tx.sign(keypair);
+
+    return {
+      signedXdr: tx.toXDR(),
+      publicKey: keypair.publicKey(),
+    };
   }
 
   getWallet(id: string): Wallet | undefined {
@@ -113,3 +171,16 @@ export class LumenClient {
   }
 }
 
+export async function createWalletWithPasskey(
+  client: LumenClient,
+  opts?: PasskeyRegistrationOpts
+): Promise<PasskeyWalletResult> {
+  return client.createWalletWithPasskey(opts);
+}
+
+export async function signWithPasskey(
+  client: LumenClient,
+  opts: { credentialId?: string; transactionXdr: string; username?: string }
+): Promise<{ signedXdr: string; publicKey: string }> {
+  return client.signWithPasskey(opts);
+}

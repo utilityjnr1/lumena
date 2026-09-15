@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
+import { logger } from "./logger.js";
 
 export class ValidationError extends Error {
   statusCode: number;
@@ -43,7 +44,7 @@ export const errorHandler = (
   res: Response,
   _next: NextFunction
 ): Response => {
-  console.error("Lumen error:", err);
+  logger.error({ err }, "Lumen error");
 
   if (err instanceof ValidationError) {
     return res.status(err.statusCode).json({

@@ -1,6 +1,7 @@
 import { createServer } from "./server.js";
 import { EnvSigner, AwsKmsSigner } from "./signers/index.js";
 import type { Signer } from "@lumen/types";
+import { logger } from "./logger.js";
 
 /**
  * SIGNER_PROVIDER controls how private keys are accessed:
@@ -20,7 +21,7 @@ const signerProvider = (process.env.SIGNER_PROVIDER ?? "env").toLowerCase();
 
 async function buildSigners(): Promise<{ cosigner: Signer; feePayer: Signer }> {
   if (signerProvider === "awskms") {
-    console.log("Using AWS KMS signers (SIGNER_PROVIDER=awskms)");
+    logger.info("Using AWS KMS signers (SIGNER_PROVIDER=awskms)");
     const [cosigner, feePayer] = await Promise.all([
       AwsKmsSigner.fromEnv("KMS_COSIGNER_KEY_ID"),
       AwsKmsSigner.fromEnv("KMS_FEE_PAYER_KEY_ID"),
@@ -30,7 +31,7 @@ async function buildSigners(): Promise<{ cosigner: Signer; feePayer: Signer }> {
 
   // Default: env-based signers (dev / testnet).
   if (signerProvider !== "env") {
-    console.warn(
+    logger.warn(
       `Unknown SIGNER_PROVIDER="${signerProvider}", falling back to "env". ` +
         "Valid values: env, awskms."
     );
@@ -40,7 +41,7 @@ async function buildSigners(): Promise<{ cosigner: Signer; feePayer: Signer }> {
   const feePayerSecret = process.env.FEE_PAYER_SECRET;
 
   if (!cosignerSecret || !feePayerSecret) {
-    console.error(
+    logger.error(
       "Missing COSIGNER_SECRET or FEE_PAYER_SECRET.\n" +
         "For production, set SIGNER_PROVIDER=awskms and configure KMS keys.\n" +
         "See docs/production-key-management.md."
