@@ -23,3 +23,9 @@ export type {
   UseSponsorStatusOptions,
   UseSponsorStatusResult,
 } from "./use-sponsor-status.js";
+export { useInvokeContract } from "./use-invoke-contract.js";
+export type {
+  InvokeContractParams,
+  InvokeContractResult,
+  UseInvokeContractResult,
+} from "./use-invoke-contract.js";
