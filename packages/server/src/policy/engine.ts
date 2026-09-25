@@ -7,6 +7,7 @@ import type {
   AllowlistRule,
   SessionKeyPolicyRule,
   TimeBoundsRule,
+  DenyAllRule,
 } from "@lumen/types";
 import { validateTimeBounds } from "@lumen/core";
 
@@ -74,6 +75,8 @@ export class PolicyEngine {
         return this.evaluateSessionKey(rule as SessionKeyPolicyRule, opts);
       case "timebounds":
         return this.evaluateTimeBounds(rule as TimeBoundsRule, opts);
+      case "deny_all":
+        return { approved: false, reason: (rule as DenyAllRule).reason ?? "Wallet is locked" };
       default:
         return { approved: true };
     }
@@ -95,7 +98,13 @@ export class PolicyEngine {
       const typedOp = op as
         Operation.Payment | Operation.PathPaymentStrictSend | Operation.PathPaymentStrictReceive;
       const opAsset: Asset | undefined =
-        "asset" in typedOp ? (typedOp as Operation.Payment).asset : undefined;
+        "asset" in typedOp
+          ? (typedOp as Operation.Payment).asset
+          : "sendAsset" in typedOp
+            ? (typedOp as Operation.PathPaymentStrictSend).sendAsset
+            : "destAsset" in typedOp
+              ? (typedOp as Operation.PathPaymentStrictReceive).destAsset
+              : undefined;
       const opAssetId = this.getAssetIdentifier(opAsset);
 
       if (opAssetId === targetAsset) {
