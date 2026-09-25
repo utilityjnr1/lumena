@@ -14,8 +14,8 @@ export interface WalletOpts {
   ownerKeypair?: Keypair;
   /**
    * Optional KeyManager instance to inject. If not provided, a new default
-   * KeyManager is created internally. Inject a custom instance to use
-   * localStorage-backed storage or to facilitate unit testing.
+   * KeyManager is created internally. Inject a custom instance to use another
+   * persistent storage backend or to facilitate unit testing.
    */
   keyManager?: KeyManager;
 }
