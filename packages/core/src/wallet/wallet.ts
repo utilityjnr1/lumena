@@ -70,11 +70,13 @@ export class Wallet {
     }
   }
 
+  /** Returns the on-chain account address after the wallet has been created. */
   get address(): string {
     if (!this._address) throw new Error("Wallet not created yet");
     return this._address;
   }
 
+  /** Creates, sponsors, configures multisig for, and stores the wallet account. */
   async create(): Promise<{ address: string; publicKey: string }> {
     if (!this._keypair) {
       this._keypair = this.keyManager.generateKeypair();
@@ -98,6 +100,7 @@ export class Wallet {
     return { address: this._address, publicKey: this._address };
   }
 
+  /** Reads the wallet balance for native XLM or the provided Stellar asset. */
   async getBalance(asset?: Asset): Promise<string> {
     const account = await this.client.horizon.loadAccount(this.address);
 
@@ -112,6 +115,7 @@ export class Wallet {
     return (balance as any)?.balance ?? "0";
   }
 
+  /** Builds, signs, and submits a payment from the wallet account. */
   async send(destination: string, asset: Asset, amount: string): Promise<{ hash: string }> {
     if (!this._keypair) throw new Error("Wallet not initialized");
 
