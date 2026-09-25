@@ -9,6 +9,28 @@ Command-Line Interface (CLI) tool for inspecting wallets, managing policy specs,
 npx @lumen/cli --help
 ```
 
+## Global Options
+
+### `--json`
+
+Output machine-readable JSON instead of human-readable text. Available for all commands.
+
+```bash
+# Get status as JSON
+npx @lumen/cli status --json
+
+# Get policy as JSON
+npx @lumen/cli policy get G... --json
+
+# Create wallet and output JSON
+npx @lumen/cli wallet create --json
+
+# Inspect transaction XDR as JSON
+npx @lumen/cli cosign inspect "AAAAAgAAA..." --json
+```
+
+On error with `--json`, the CLI outputs `{ "error": "error message" }` to stderr and exits with a non-zero code.
+
 ## Commands Reference
 
 ### 1. `lumen status`
