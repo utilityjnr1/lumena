@@ -8,6 +8,7 @@ Server-side daemon and HTTP API service for the Lumen non-custodial wallet ecosy
 
 - **Co-Signing Engine**: 2-of-2 multisig transaction validation with configurable spending policies (spend limits, velocity tracking, destination allowlists).
 - **Fee Sponsorship**: Wraps approved user transactions in Stellar fee-bump envelopes so end users pay zero XLM transaction fees.
+- **Transaction Webhooks**: Notifies subscribed endpoints of successful fee-bump submissions with the `transaction.fee_bump.submitted` event.
 - **Sponsored Account Creation**: Creates new Stellar keypairs and funds initial account reserves.
 - **SEP-10 Web Authentication**: Standardized challenge-response authentication for Stellar accounts with JWT issuance.
 - **Hardware Signer Support**: Supports environment variable keys (`EnvSigner`) for development/testnet and AWS KMS / CloudHSM (`AwsKmsSigner`) for production.
@@ -99,6 +100,12 @@ pnpm --filter @lumen/server clean
 | `POST` | `/auth` | Verifies signed challenge and issues JWT |
 | `GET` | `/metrics` | Prometheus metrics endpoint |
 | `GET` | `/docs` | Interactive Swagger / OpenAPI documentation |
+
+---
+
+## Webhook Events
+
+Register `transaction.fee_bump.submitted` to receive a webhook after a fee-bump transaction is successfully submitted to Stellar. The payload data includes the fee source and submitted transaction hash. This event is dispatched alongside the existing `transaction.sponsored` event.
 
 ---
 
