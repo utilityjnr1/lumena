@@ -20,6 +20,7 @@
     "@stellar/stellar-sdk": "^17.0.1",
     "cors": "2.8.5",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.7.0",
     "pino": "^10.3.1",
     "pino-http": "^10.4.0",
     "prom-client": "^15.1.3",
