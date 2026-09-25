@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { WebhookDispatcher } from "../webhook/dispatcher.js";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { WebhookDispatcher, verifyWebhookSignature } from "../webhook/dispatcher.js";
 import { createHmac } from "node:crypto";
 
 describe("WebhookDispatcher Unit Tests", () => {
@@ -35,6 +35,18 @@ describe("WebhookDispatcher Unit Tests", () => {
     expect(sig).toBe(expected);
   });
 
+  it("verifies webhook signatures and rejects mismatched or malformed signatures", () => {
+    const dispatcher = new WebhookDispatcher();
+    const payload = JSON.stringify({ event: "transaction.cosigned" });
+    const signature = dispatcher.generateSignature(payload, secret);
+
+    expect(verifyWebhookSignature(payload, signature, secret)).toBe(true);
+    expect(verifyWebhookSignature(`${payload} `, signature, secret)).toBe(false);
+    expect(verifyWebhookSignature(payload, signature, "wrong-secret")).toBe(false);
+    expect(verifyWebhookSignature(payload, "not-a-signature", secret)).toBe(false);
+    expect(verifyWebhookSignature(payload, `sha256=${"a".repeat(63)}`, secret)).toBe(false);
+  });
+
   it("filters events by webhook subscriptions and supports wildcards", async () => {
     const dispatcher = new WebhookDispatcher({ timeoutMs: 1000, maxRetries: 0 });
 
@@ -64,7 +76,7 @@ describe("WebhookDispatcher Unit Tests", () => {
         headers: expect.objectContaining({
           "X-Lumen-Event": "balance.low",
         }),
-      })
+      }),
     );
 
     // Dispatch cosigned event -> both should receive

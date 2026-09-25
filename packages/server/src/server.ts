@@ -318,6 +318,10 @@ export function createServer(opts: ServerOpts): ServerResult {
         throw new ValidationError("Validation failed", parsed.error.flatten().fieldErrors);
       }
 
+      if (policyEngine.getPolicy(parsed.data.walletId)) {
+        throw new PolicyError("A policy already exists for this wallet", 409);
+      }
+
       const policy = {
         id: crypto.randomUUID(),
         walletId: parsed.data.walletId,
@@ -326,9 +330,47 @@ export function createServer(opts: ServerOpts): ServerResult {
       };
 
       policyEngine.addPolicy(policy);
+      res.status(201).json(policy);
+    }),
+  );
+
+  app.put(
+    "/policy/:walletId",
+    wrapHandler(async (req: Request, res: Response) => {
+      const parsed = PolicyRequestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new ValidationError("Validation failed", parsed.error.flatten().fieldErrors);
+      }
+
+      const walletId = req.params.walletId as string;
+      if (parsed.data.walletId !== walletId) {
+        throw new ValidationError("walletId in the request body must match the URL");
+      }
+
+      const existingPolicy = policyEngine.getPolicy(walletId);
+      if (!existingPolicy) {
+        throw new PolicyError("No policy found", 404);
+      }
+
+      const policy = {
+        ...existingPolicy,
+        rules: parsed.data.rules,
+      };
+
+      policyEngine.addPolicy(policy);
       res.json(policy);
     }),
   );
+
+  app.delete("/policy/:walletId", (req: Request, res: Response) => {
+    const walletId = req.params.walletId as string;
+    if (!policyEngine.getPolicy(walletId)) {
+      throw new PolicyError("No policy found", 404);
+    }
+
+    policyEngine.removePolicy(walletId);
+    res.status(204).send();
+  });
 
   app.post(
     "/wallet/create",
