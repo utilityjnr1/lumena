@@ -313,6 +313,23 @@ export const openApiSpec = {
           "404": { description: "No policy found for wallet" },
         },
       },
+      delete: {
+        summary: "Delete Wallet Policy",
+        description: "Deletes the wallet policy and clears its in-memory tracking data.",
+        parameters: [
+          {
+            name: "walletId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+            description: "Stellar public key address of the wallet.",
+          },
+        ],
+        responses: {
+          "204": { description: "Policy deleted successfully" },
+          "404": { description: "No policy found for wallet" },
+        },
+      },
     },
   },
   components: {

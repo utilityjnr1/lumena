@@ -91,7 +91,8 @@ pnpm --filter @lumen/server clean
 | `POST` | `/cosign` | Validates transaction against policy and appends co-signer signature |
 | `POST` | `/fee-bump` | Wraps transaction in a fee-bump envelope signed by fee-payer |
 | `GET` | `/policy/:walletId` | Retrieves the active policy spec for a wallet |
-| `POST` | `/policy` | Sets or updates policy rules for a wallet |
+| `POST` | `/policy` | Creates a policy for a wallet |
+| `PUT` | `/policy/:walletId` | Replaces rules on an existing wallet policy |
 | `DELETE` | `/policy/:walletId` | Deletes the policy specification for a wallet |
 | `GET` | `/status` | Server health check and fee-sponsor balance |
 | `GET` | `/.well-known/stellar.toml` | Serves SEP-10 discovery TOML |

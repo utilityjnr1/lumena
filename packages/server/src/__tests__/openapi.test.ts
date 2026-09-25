@@ -16,6 +16,7 @@ describe("OpenAPI Specification", () => {
     expect(paths).toContain("/policy");
     expect(paths).toContain("/policy/{walletId}");
     expect(openApiSpec.paths["/policy/{walletId}"]).toHaveProperty("put");
+    expect(openApiSpec.paths["/policy/{walletId}"]).toHaveProperty("delete");
   });
 
   it("defines valid request and response schemas", () => {

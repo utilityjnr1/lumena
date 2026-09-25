@@ -362,6 +362,16 @@ export function createServer(opts: ServerOpts): ServerResult {
     }),
   );
 
+  app.delete("/policy/:walletId", (req: Request, res: Response) => {
+    const walletId = req.params.walletId as string;
+    if (!policyEngine.getPolicy(walletId)) {
+      throw new PolicyError("No policy found", 404);
+    }
+
+    policyEngine.removePolicy(walletId);
+    res.status(204).send();
+  });
+
   app.post(
     "/wallet/create",
     wrapHandler(async (req: Request, res: Response) => {
