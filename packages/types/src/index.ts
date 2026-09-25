@@ -9,6 +9,7 @@ export type {
   AllowlistRule,
   SessionKeyPolicyRule,
   TimeBoundsRule,
+  RequireMemoRule,
   PolicyStore,
 } from "./policy.js";
 export type { Signer } from "./signer.js";

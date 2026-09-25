@@ -1,4 +1,4 @@
-import type { Policy, SpendLimit, VelocityRule, AllowlistRule, TimeBoundsRule } from "@lumen/types";
+import type { Policy, SpendLimit, VelocityRule, AllowlistRule, TimeBoundsRule, RequireMemoRule } from "@lumen/types";
 
 export function createSpendLimitPolicy(
   walletId: string,
@@ -33,5 +33,10 @@ export function createTimeBoundsPolicy(
   allowUnbounded?: boolean
 ): Policy {
   const rule: TimeBoundsRule = { type: "timebounds", maxWindowSeconds, allowUnbounded };
+  return { id: crypto.randomUUID(), walletId, rules: [rule], createdAt: new Date() };
+}
+
+export function createRequireMemoPolicy(walletId: string, destinations?: string[]): Policy {
+  const rule: RequireMemoRule = { type: "require_memo", destinations };
   return { id: crypto.randomUUID(), walletId, rules: [rule], createdAt: new Date() };
 }

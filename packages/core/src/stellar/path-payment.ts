@@ -53,6 +53,31 @@ export async function pathPayment(opts: PathPaymentOpts): Promise<{ hash: string
   throw new Error(`Path payment failed: ${result.hash}`);
 }
 
+export async function pathPaymentStrictReceive(opts: PathPaymentOpts): Promise<{ hash: string }> {
+  const { client, sourceKeypair, destination, sendAsset, sendAmount, destAsset, destMin, path = [] } = opts;
+  const account = await client.horizon.loadAccount(sourceKeypair.publicKey());
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: client.networkPassphrase,
+  })
+    .addOperation(
+      Operation.pathPaymentStrictReceive({
+        sendAsset,
+        sendMax: sendAmount,
+        destination,
+        destAsset,
+        destAmount: destMin,
+        path,
+      })
+    )
+    .setTimeout(180)
+    .build();
+  tx.sign(sourceKeypair);
+  const result = await client.horizon.submitTransaction(tx);
+  if (result.successful) return { hash: result.hash };
+  throw new Error(`Strict receive path payment failed: ${result.hash}`);
+}
+
 export async function findPaths(
   client: StellarClient,
   source: string,

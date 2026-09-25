@@ -23,3 +23,5 @@ export type {
   UseSponsorStatusOptions,
   UseSponsorStatusResult,
 } from "./use-sponsor-status.js";
+export { useSimulateContract } from "./use-simulate-contract.js";
+export type { SimulateContractParams } from "./use-simulate-contract.js";

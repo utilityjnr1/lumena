@@ -7,6 +7,7 @@ import type {
   AllowlistRule,
   SessionKeyPolicyRule,
   TimeBoundsRule,
+  RequireMemoRule,
 } from "@lumen/types";
 import { validateTimeBounds } from "@lumen/core";
 
@@ -74,6 +75,8 @@ export class PolicyEngine {
         return this.evaluateSessionKey(rule as SessionKeyPolicyRule, opts);
       case "timebounds":
         return this.evaluateTimeBounds(rule as TimeBoundsRule, opts);
+      case "require_memo":
+        return this.evaluateRequireMemo(rule as RequireMemoRule, opts);
       default:
         return { approved: true };
     }
@@ -237,6 +240,19 @@ export class PolicyEngine {
       return { approved: false, reason: result.reason };
     }
 
+    return { approved: true };
+  }
+
+  private evaluateRequireMemo(rule: RequireMemoRule, opts: EvaluateOpts): EvaluateResult {
+    if (!opts.transaction.memo || opts.transaction.memo.type === "none") {
+      const requiresMemo = opts.transaction.operations.some((op) => {
+        if (!("destination" in op) || !op.destination) return false;
+        return !rule.destinations || rule.destinations.includes(op.destination.toString());
+      });
+      if (requiresMemo) {
+        return { approved: false, reason: "Transaction memo is required for this destination" };
+      }
+    }
     return { approved: true };
   }
 }
