@@ -10,7 +10,7 @@ pnpm add @lumen/web-sdk
 
 ## Quick start
 
-`LumenClient` keeps created wallets in memory for the lifetime of the client instance. Set `serverUrl` when payments should use the Lumen co-signing and fee-bump endpoints.
+`LumenClient` keeps created wallets in memory for the lifetime of the client instance. Set `serverUrl` to send payments through the Lumen policy, co-signing, and fee-bump endpoints.
 
 ```ts
 import { LumenClient } from "@lumen/web-sdk";
@@ -43,7 +43,7 @@ The `id` returned by `createWallet` is the wallet's Stellar address. Keep `spons
 | `network` | `"testnet" \| "mainnet" \| "local"` | No | Defaults to `"testnet"` |
 | `horizonUrl` | `string` | No | Override the Horizon REST endpoint |
 | `rpcUrl` | `string` | No | Override the Soroban RPC endpoint |
-| `serverUrl` | `string` | No | Base URL of a Lumen server; enables server-backed payment co-signing and fee bumping |
+| `serverUrl` | `string` | No | Base URL of a Lumen server; required for sending payments through policy enforcement and fee sponsorship |
 | `sponsorSecret` | `string` | Yes | Secret key used to sponsor account creation |
 | `serverPublicKey` | `string` | Yes | Public key of the server co-signer |
 
@@ -87,7 +87,7 @@ Omit `assetCode` or pass `"XLM"` for native XLM. Non-native asset codes are case
 
 #### `sendPayment`
 
-With `serverUrl`, the method submits an owner-signed XDR to `/cosign`, then submits the co-signed XDR to `/fee-bump/submit`; the server is responsible for policy evaluation, co-signing, fee bumping, and submission. Without `serverUrl`, it submits directly through the core wallet and does not use the server policy, co-signer, or fee-bump path.
+Submits an owner-signed XDR to `/cosign`, then submits the co-signed XDR to `/fee-bump/submit`; the server is responsible for policy evaluation, co-signing, fee bumping, and submission. A `serverUrl` is required; payments fail explicitly if one is not configured rather than bypassing policy enforcement or fee sponsorship.
 
 #### `simulateContract`
 
@@ -124,8 +124,8 @@ See `.env.example` at the repository root for the full server configuration. Nev
 ## How it works
 
 1. `createWallet` sponsors the account reserve and configures 2-of-2 multisig with the server co-signer.
-2. With `serverUrl` configured, `sendPayment` sends the owner-signed transaction to the server for policy evaluation and co-signing, then submits the fee-bumped transaction.
-3. `simulateContract` only simulates; `invokeContract` and the direct `sendPayment` fallback sign and submit through the core wallet without the server policy, co-signer, or fee-bump path.
+2. `sendPayment` sends the owner-signed transaction to the server for policy evaluation and co-signing, then submits the fee-bumped transaction. A configured `serverUrl` is required.
+3. `simulateContract` only simulates; `invokeContract` signs and submits directly through the core wallet without the server policy, co-signer, or fee-bump path.
 
 ## Development
 
