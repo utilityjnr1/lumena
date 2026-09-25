@@ -382,6 +382,13 @@ export function createServer(opts: ServerOpts): ServerResult {
     res.status(204).send();
   });
 
+  app.get(
+    "/webhooks/deliveries",
+    wrapHandler(async (_req: Request, res: Response) => {
+      res.json(await webhookDispatcher.getDeliveryLog());
+    }),
+  );
+
   app.use(errorHandler);
 
   const server = createHttpServer(app as unknown as RequestListener);

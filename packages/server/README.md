@@ -93,12 +93,18 @@ pnpm --filter @lumen/server clean
 | `GET` | `/policy/:walletId` | Retrieves the active policy spec for a wallet |
 | `POST` | `/policy` | Sets or updates policy rules for a wallet |
 | `DELETE` | `/policy/:walletId` | Deletes the policy specification for a wallet |
+| `GET` | `/webhooks/deliveries` | Reads persistent webhook delivery history |
 | `GET` | `/status` | Server health check and fee-sponsor balance |
 | `GET` | `/.well-known/stellar.toml` | Serves SEP-10 discovery TOML |
 | `GET` | `/auth` | Generates a SEP-10 challenge transaction |
 | `POST` | `/auth` | Verifies signed challenge and issues JWT |
 | `GET` | `/metrics` | Prometheus metrics endpoint |
 | `GET` | `/docs` | Interactive Swagger / OpenAPI documentation |
+
+Webhook delivery outcomes are appended to `data/webhook-deliveries.jsonl` by default. Set
+`LUMEN_WEBHOOK_DELIVERY_LOG_PATH` to choose another location. Each dispatcher exposes
+`getDeliveryLog()` and the `GET /webhooks/deliveries` endpoint read persisted history,
+including successful and failed attempts; records do not include webhook secrets.
 
 ---
 

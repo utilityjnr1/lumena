@@ -191,6 +191,41 @@ export const openApiSpec = {
         },
       },
     },
+    "/webhooks/deliveries": {
+      get: {
+        summary: "Get Webhook Delivery History",
+        description:
+          "Returns persisted delivery outcomes, including successful and failed webhook deliveries.",
+        responses: {
+          "200": {
+            description: "Persisted webhook delivery records",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      deliveryId: { type: "string" },
+                      event: { type: "string" },
+                      webhookId: { type: "string" },
+                      url: { type: "string" },
+                      success: { type: "boolean" },
+                      statusCode: { type: "number" },
+                      attempts: { type: "number" },
+                      error: { type: "string" },
+                      timestamp: { type: "string", format: "date-time" },
+                      deliveredAt: { type: "string", format: "date-time" },
+                      data: {},
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
     "/policy": {
       post: {
         summary: "Create or Update Wallet Policy",

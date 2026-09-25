@@ -13,6 +13,7 @@ describe("OpenAPI Specification", () => {
     expect(paths).toContain("/fee-bump");
     expect(paths).toContain("/fee-bump/submit");
     expect(paths).toContain("/wallet/create");
+    expect(paths).toContain("/webhooks/deliveries");
     expect(paths).toContain("/policy");
     expect(paths).toContain("/policy/{walletId}");
   });

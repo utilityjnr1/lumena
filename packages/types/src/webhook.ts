@@ -29,3 +29,11 @@ export interface WebhookDeliveryResult {
   attempts: number;
   error?: string;
 }
+
+export interface WebhookDeliveryLogEntry extends WebhookDeliveryResult {
+  deliveryId: string;
+  event: WebhookEventType;
+  timestamp: string;
+  deliveredAt: string;
+  data: unknown;
+}
