@@ -110,4 +110,25 @@ export class Sep41Token {
       ],
     });
   }
+
+  allowance(owner: string, spender: string): xdr.Operation {
+    return Operation.invokeContractFunction({
+      contract: this.contractId,
+      function: "allowance",
+      args: [new Address(owner).toScVal(), new Address(spender).toScVal()],
+    });
+  }
+
+  transferFrom(spender: string, from: string, to: string, amount: string | bigint): xdr.Operation {
+    return Operation.invokeContractFunction({
+      contract: this.contractId,
+      function: "transfer_from",
+      args: [
+        new Address(spender).toScVal(),
+        new Address(from).toScVal(),
+        new Address(to).toScVal(),
+        nativeToScVal(BigInt(amount), { type: "i128" }),
+      ],
+    });
+  }
 }

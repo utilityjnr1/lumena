@@ -19,6 +19,7 @@ export class VaultSigner implements Signer {
   private readonly mountPath: string;
   private readonly namespace?: string;
   private cachedPublicKey: string | null = null;
+  private readonly prehashed: boolean;
 
   constructor(config: VaultSignerConfig) {
     if (!config.vaultUrl || !config.token || !config.keyName) {
@@ -31,6 +32,7 @@ export class VaultSigner implements Signer {
     this.keyName = config.keyName;
     this.mountPath = config.mountPath ?? "transit";
     this.namespace = config.namespace;
+    this.prehashed = Boolean((config as VaultSignerConfig & { prehashed?: boolean }).prehashed);
   }
 
   static async fromEnv(envPrefix: string = "VAULT"): Promise<VaultSigner> {
@@ -129,6 +131,7 @@ export class VaultSigner implements Signer {
       headers: this.getHeaders(),
       body: JSON.stringify({
         input: base64Input,
+        prehashed: this.prehashed,
       }),
     });
 

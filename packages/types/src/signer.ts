@@ -44,5 +44,5 @@ export interface VaultSignerConfig {
   keyName: string;
   mountPath?: string; // defaults to 'transit'
   namespace?: string;
+  prehashed?: boolean;
 }
-
