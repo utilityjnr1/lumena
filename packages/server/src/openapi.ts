@@ -191,6 +191,54 @@ export const openApiSpec = {
         },
       },
     },
+    "/wallet/{address}/transactions": {
+      get: {
+        summary: "Get Wallet Transaction History",
+        description:
+          "Retrieves the most recent Stellar transactions for a wallet from Horizon. Results are ordered newest first and can be paginated with cursor.",
+        parameters: [
+          {
+            name: "address",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+            description: "Stellar public key address of the wallet.",
+          },
+          {
+            name: "limit",
+            in: "query",
+            required: false,
+            schema: { type: "integer", minimum: 1, maximum: 200, default: 20 },
+          },
+          {
+            name: "cursor",
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+            description: "Horizon paging token from the previous response.",
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Wallet transaction history",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    address: { type: "string" },
+                    transactions: { type: "array", items: { type: "object" } },
+                    nextCursor: { type: "string", nullable: true },
+                  },
+                  required: ["address", "transactions", "nextCursor"],
+                },
+              },
+            },
+          },
+          "400": { description: "Invalid wallet address or pagination parameter" },
+        },
+      },
+    },
     "/policy": {
       post: {
         summary: "Create or Update Wallet Policy",
