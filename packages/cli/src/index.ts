@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { TransactionBuilder } from "@stellar/stellar-sdk";
+import { Horizon, TransactionBuilder } from "@stellar/stellar-sdk";
 import fs from "node:fs";
 
 const program = new Command();
@@ -12,6 +12,24 @@ program
   .version("0.1.0");
 
 const DEFAULT_SERVER_URL = process.env.LUMEN_SERVER_URL || "http://localhost:3000";
+type StellarNetwork = "testnet" | "mainnet" | "local";
+
+const HORIZON_URLS: Record<StellarNetwork, string> = {
+  testnet: "https://horizon-testnet.stellar.org",
+  mainnet: "https://horizon.stellar.org",
+  local: "http://localhost:8000",
+};
+
+function getStellarNetwork(value: string): StellarNetwork {
+  switch (value) {
+    case "testnet":
+    case "mainnet":
+    case "local":
+      return value;
+    default:
+      throw new Error(`Unsupported Stellar network: ${value}`);
+  }
+}
 
 program
   .command("status")
@@ -141,6 +159,40 @@ walletCmd
       console.log("Public Key:", result.publicKey);
     } catch (err: any) {
       console.error("Error creating wallet:", err.message || err);
+      process.exit(1);
+    }
+  });
+
+walletCmd
+  .command("balance <address>")
+  .description("Check all asset balances for a Stellar wallet address")
+  .option("-n, --network <network>", "Stellar network (testnet, mainnet, or local)", "testnet")
+  .option("--horizon-url <url>", "Override the Stellar Horizon server URL")
+  .action(async (address, options) => {
+    try {
+      const network = getStellarNetwork(options.network);
+      const horizonUrl = options.horizonUrl ?? HORIZON_URLS[network];
+      const horizon = new Horizon.Server(horizonUrl, {
+        allowHttp: network === "local" || horizonUrl.startsWith("http://"),
+      });
+      const account = await horizon.loadAccount(address);
+      const balances = account.balances.map((balance) => ({
+        asset:
+          balance.asset_type === "native"
+            ? "XLM"
+            : balance.asset_type === "liquidity_pool_shares"
+              ? `liquidity_pool:${balance.liquidity_pool_id}`
+              : `${balance.asset_code}:${balance.asset_issuer}`,
+        balance: balance.balance,
+      }));
+
+      console.log(`Balances for ${address}:`);
+      console.log(JSON.stringify(balances, null, 2));
+    } catch (err: unknown) {
+      console.error(
+        "Error fetching wallet balance:",
+        err instanceof Error ? err.message : String(err),
+      );
       process.exit(1);
     }
   });
