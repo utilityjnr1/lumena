@@ -1,4 +1,17 @@
 services:
+  lumen-server:
+    build:
+      context: ..
+      dockerfile: packages/server/Dockerfile
+    environment:
+      STELLAR_NETWORK: local
+      HORIZON_URL: http://stellar:8000
+      SOROBAN_RPC_URL: http://stellar:8000/rpc
+    ports:
+      - "3000:3000"
+    depends_on:
+      - stellar
+
   stellar:
     image: stellar/quickstart:testing
     command: ["--local"]
