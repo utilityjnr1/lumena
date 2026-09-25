@@ -1,6 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { PolicyEngine } from "../policy/engine.js";
-import { createSpendLimitPolicy, createAllowlistPolicy } from "../policy/rules.js";
+import {
+  createAllowlistPolicy,
+  createSpendLimitPolicy,
+  createTimeBoundsPolicy,
+  createVelocityPolicy,
+} from "../policy/rules.js";
 import type { Transaction } from "@stellar/stellar-sdk";
 
 describe("PolicyEngine Multi-Op & Asset Spend Limits", () => {
@@ -63,7 +68,10 @@ describe("PolicyEngine Multi-Op & Asset Spend Limits", () => {
       ],
     } as unknown as Transaction;
 
-    const resInvalid = await engine.evaluate({ walletAddress: walletId, transaction: invalidPathTx });
+    const resInvalid = await engine.evaluate({
+      walletAddress: walletId,
+      transaction: invalidPathTx,
+    });
     expect(resInvalid.approved).toBe(false);
   });
 
@@ -73,9 +81,7 @@ describe("PolicyEngine Multi-Op & Asset Spend Limits", () => {
     await engine.addPolicy(xlmPolicy);
 
     const xlmTx = {
-      operations: [
-        { type: "payment", destination: "GDEST", amount: "50", asset: "native" },
-      ],
+      operations: [{ type: "payment", destination: "GDEST", amount: "50", asset: "native" }],
     } as unknown as Transaction;
 
     const resXlm = await engine.evaluate({ walletAddress: walletId, transaction: xlmTx });
@@ -83,9 +89,7 @@ describe("PolicyEngine Multi-Op & Asset Spend Limits", () => {
 
     // Payments in USDC should pass XLM spend limit rule
     const usdcTx = {
-      operations: [
-        { type: "payment", destination: "GDEST", amount: "1000", asset: "USDC:G123" },
-      ],
+      operations: [{ type: "payment", destination: "GDEST", amount: "1000", asset: "USDC:G123" }],
     } as unknown as Transaction;
 
     const resUsdc = await engine.evaluate({ walletAddress: walletId, transaction: usdcTx });
@@ -99,9 +103,7 @@ describe("PolicyEngine Multi-Op & Asset Spend Limits", () => {
 
     // Multi-op total = 70 exceeds maxPerTx (60)
     const exceedPerTx = {
-      operations: [
-        { type: "payment", destination: "GDEST", amount: "70", asset: "native" },
-      ],
+      operations: [{ type: "payment", destination: "GDEST", amount: "70", asset: "native" }],
     } as unknown as Transaction;
 
     const res1 = await engine.evaluate({ walletAddress: walletId, transaction: exceedPerTx });
@@ -110,18 +112,14 @@ describe("PolicyEngine Multi-Op & Asset Spend Limits", () => {
 
     // First valid tx of 50
     const validTx1 = {
-      operations: [
-        { type: "payment", destination: "GDEST", amount: "50", asset: "native" },
-      ],
+      operations: [{ type: "payment", destination: "GDEST", amount: "50", asset: "native" }],
     } as unknown as Transaction;
     const resValid = await engine.evaluate({ walletAddress: walletId, transaction: validTx1 });
     expect(resValid.approved).toBe(true);
 
     // Second valid tx of 55 will push daily total to 105 (exceeding daily limit 100)
     const validTx2 = {
-      operations: [
-        { type: "payment", destination: "GDEST", amount: "55", asset: "native" },
-      ],
+      operations: [{ type: "payment", destination: "GDEST", amount: "55", asset: "native" }],
     } as unknown as Transaction;
     const resDaily = await engine.evaluate({ walletAddress: walletId, transaction: validTx2 });
     expect(resDaily.approved).toBe(false);
@@ -143,7 +141,7 @@ describe("PolicyEngine TimeBounds & Expiration Enforcement", () => {
 
     const result = engine.evaluate({ walletAddress: walletId, transaction: txNoBounds });
     expect(result.approved).toBe(false);
-    expect(result.reason).toContain("does not have required TimeBounds");
+    expect(result.reason).toContain("unbounded transactions are not permitted");
   });
 
   it("approves transactions without TimeBounds when allowUnbounded is true", async () => {
@@ -177,6 +175,24 @@ describe("PolicyEngine TimeBounds & Expiration Enforcement", () => {
     expect(result.reason).toContain("has expired");
   });
 
+  it("rejects transactions with a minTime too far in the future", async () => {
+    const engine = new PolicyEngine();
+    engine.addPolicy(createTimeBoundsPolicy(walletId, 300));
+
+    const now = Math.floor(Date.now() / 1000);
+    const futureTx = {
+      operations: [],
+      timeBounds: {
+        minTime: (now + 600).toString(),
+        maxTime: (now + 900).toString(),
+      },
+    } as unknown as Transaction;
+
+    const result = engine.evaluate({ walletAddress: walletId, transaction: futureTx });
+    expect(result.approved).toBe(false);
+    expect(result.reason).toContain("more than 5 minutes in the future");
+  });
+
   it("rejects transactions exceeding the maximum validity window", async () => {
     const engine = new PolicyEngine();
     engine.addPolicy(createTimeBoundsPolicy(walletId, 120)); // max 120s window
@@ -192,7 +208,7 @@ describe("PolicyEngine TimeBounds & Expiration Enforcement", () => {
 
     const result = engine.evaluate({ walletAddress: walletId, transaction: wideWindowTx });
     expect(result.approved).toBe(false);
-    expect(result.reason).toContain("exceeds policy limit of 120s");
+    expect(result.reason).toContain("exceeds maximum allowed window");
   });
 
   it("approves valid transactions within timebounds", async () => {
@@ -209,6 +225,74 @@ describe("PolicyEngine TimeBounds & Expiration Enforcement", () => {
     } as unknown as Transaction;
 
     const result = engine.evaluate({ walletAddress: walletId, transaction: validTx });
+    expect(result.approved).toBe(true);
+  });
+});
+
+describe("PolicyEngine Velocity Limits", () => {
+  const walletId = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
+  const transaction = { operations: [] } as unknown as Transaction;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("approves transactions under the limit within the window", () => {
+    const now = 1_700_000_000_000;
+    vi.spyOn(Date, "now").mockReturnValue(now);
+
+    const engine = new PolicyEngine();
+    engine.addPolicy(createVelocityPolicy(walletId, 3, 5));
+
+    for (let index = 0; index < 2; index++) {
+      const result = engine.evaluate({ walletAddress: walletId, transaction });
+      expect(result.approved).toBe(true);
+    }
+  });
+
+  it("approves exactly the maximum number of transactions in the window", () => {
+    const now = 1_700_000_000_000;
+    vi.spyOn(Date, "now").mockReturnValue(now);
+
+    const engine = new PolicyEngine();
+    engine.addPolicy(createVelocityPolicy(walletId, 3, 5));
+
+    for (let index = 0; index < 3; index++) {
+      const result = engine.evaluate({ walletAddress: walletId, transaction });
+      expect(result.approved).toBe(true);
+    }
+  });
+
+  it("rejects the transaction after the velocity limit is exceeded", () => {
+    const now = 1_700_000_000_000;
+    vi.spyOn(Date, "now").mockReturnValue(now);
+
+    const engine = new PolicyEngine();
+    engine.addPolicy(createVelocityPolicy(walletId, 3, 5));
+
+    for (let index = 0; index < 3; index++) {
+      engine.evaluate({ walletAddress: walletId, transaction });
+    }
+
+    const result = engine.evaluate({ walletAddress: walletId, transaction });
+    expect(result.approved).toBe(false);
+    expect(result.reason).toContain("Too many transactions (4)");
+  });
+
+  it("does not count transactions outside the velocity window", () => {
+    const now = 1_700_000_000_000;
+    const windowMs = 5 * 60 * 1000;
+    const dateNow = vi.spyOn(Date, "now").mockReturnValue(now);
+
+    const engine = new PolicyEngine();
+    engine.addPolicy(createVelocityPolicy(walletId, 2, 5));
+
+    engine.evaluate({ walletAddress: walletId, transaction });
+    engine.evaluate({ walletAddress: walletId, transaction });
+
+    dateNow.mockReturnValue(now + windowMs + 1);
+
+    const result = engine.evaluate({ walletAddress: walletId, transaction });
     expect(result.approved).toBe(true);
   });
 });
