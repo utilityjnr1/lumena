@@ -6,7 +6,12 @@ export interface Policy {
 }
 
 export type PolicyRule =
-  SpendLimit | VelocityRule | AllowlistRule | SessionKeyPolicyRule | TimeBoundsRule;
+  | SpendLimit
+  | VelocityRule
+  | AllowlistRule
+  | SessionKeyPolicyRule
+  | TimeBoundsRule
+  | MaxOperationsRule;
 
 export interface SpendLimit {
   type: "spend_limit";
@@ -37,6 +42,11 @@ export interface TimeBoundsRule {
   type: "timebounds";
   maxWindowSeconds?: number;
   allowUnbounded?: boolean;
+}
+
+export interface MaxOperationsRule {
+  type: "max_operations";
+  maxOperations: number;
 }
 
 export interface PolicyStore {

@@ -1,11 +1,12 @@
-import express, {
-  type Express,
-  type Request,
-  type Response,
-  type NextFunction,
-} from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors, { type CorsOptions } from "cors";
-import { createServer as createHttpServer, type Server as HttpServer, type RequestListener, type IncomingMessage } from "node:http";
+import rateLimit from "express-rate-limit";
+import {
+  createServer as createHttpServer,
+  type Server as HttpServer,
+  type RequestListener,
+  type IncomingMessage,
+} from "node:http";
 import { Keypair } from "@stellar/stellar-sdk";
 import { StellarClient } from "@lumen/core";
 import type { Signer } from "@lumen/types";
@@ -20,12 +21,7 @@ import {
 } from "./validation.js";
 import swaggerUi from "swagger-ui-express";
 import { openApiSpec } from "./openapi.js";
-import {
-  ValidationError,
-  PolicyError,
-  errorHandler,
-  wrapHandler,
-} from "./errors.js";
+import { ValidationError, PolicyError, errorHandler, wrapHandler } from "./errors.js";
 import { logger, httpLogger } from "./logger.js";
 import {
   register,
@@ -38,8 +34,11 @@ import { SponsorMonitorService } from "./fee-sponsor/monitor.js";
 import { WebhookDispatcher } from "./webhook/dispatcher.js";
 
 export interface ServerResult {
+  /** Configured Express application. */
   app: Express;
+  /** Node HTTP server wrapping the Express application. */
   server: HttpServer;
+  /** Stellar/Horizon/RPC client used by server services. */
   client: StellarClient;
   cosignerService: CosignerService;
   feeSponsorService: FeeSponsorService;
@@ -49,7 +48,9 @@ export interface ServerResult {
 }
 
 export interface ServerOpts {
+  /** Port used by the HTTP server. Defaults to 3000. */
   port?: number;
+  /** Stellar network preset used for Horizon/RPC defaults. */
   network?: "testnet" | "mainnet" | "local";
   horizonUrl?: string;
   rpcUrl?: string;
@@ -71,8 +72,35 @@ export interface ServerOpts {
    * Defaults to allowing all origins if omitted.
    */
   cors?: CorsOptions;
+  /**
+   * Optional PolicyEngine instance.
+   */
+  policyEngine?: PolicyEngine;
+  /**
+   * Optional API key to protect server endpoints.
+   * When set, requires 'Authorization: Bearer <api-key>' on all routes except /health and /metrics.
+   */
+  apiKey?: string;
+  /**
+   * Rate limiting window in milliseconds for /cosign and /fee-bump endpoints.
+   */
+  windowMs?: number;
+  /**
+   * Maximum requests allowed within windowMs for /cosign and /fee-bump endpoints.
+   */
+  max?: number;
+  /**
+   * Rate limit options for /cosign and /fee-bump endpoints.
+   */
+  rateLimit?: {
+    windowMs?: number;
+    max?: number;
+  };
+  rateLimitWindowMs?: number;
+  rateLimitMax?: number;
 }
 
+/** Creates the Lumen API server, service graph, and policy engine. */
 export function createServer(opts: ServerOpts): ServerResult {
   const port = opts.port ?? 3000;
 
@@ -82,7 +110,7 @@ export function createServer(opts: ServerOpts): ServerResult {
     rpcUrl: opts.rpcUrl,
   });
 
-  const policyEngine = new PolicyEngine();
+  const policyEngine = opts.policyEngine ?? new PolicyEngine();
   const webhookDispatcher = opts.webhookDispatcher ?? new WebhookDispatcher();
 
   const cosignerService = new CosignerService({
@@ -125,6 +153,45 @@ export function createServer(opts: ServerOpts): ServerResult {
     next();
   });
 
+  // API Key Authentication Middleware
+  if (opts.apiKey) {
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      const cleanPath = (req.path || "").replace(/\/+$/, "") || "/";
+      if (cleanPath === "/health" || cleanPath === "/metrics") {
+        return next();
+      }
+
+      const authHeader = req.headers.authorization;
+      if (!authHeader) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+
+      const parts = authHeader.split(" ");
+      if (parts.length !== 2 || parts[0] !== "Bearer" || parts[1] !== opts.apiKey) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+
+      next();
+    });
+  }
+
+  // Rate Limiting Middleware for /cosign and /fee-bump
+  const rateLimitWindowMs =
+    opts.rateLimit?.windowMs ?? opts.rateLimitWindowMs ?? opts.windowMs ?? 60 * 1000;
+  const rateLimitMax = opts.rateLimit?.max ?? opts.rateLimitMax ?? opts.max ?? 100;
+
+  const cosignFeeBumpLimiter = rateLimit({
+    windowMs: rateLimitWindowMs,
+    limit: rateLimitMax,
+    max: rateLimitMax,
+    standardHeaders: true,
+    legacyHeaders: false,
+    statusCode: 429,
+    message: { error: "Too Many Requests" },
+  });
+
   app.use("/docs", swaggerUi.serve, swaggerUi.setup(openApiSpec));
 
   let activeRequests = 0;
@@ -137,82 +204,103 @@ export function createServer(opts: ServerOpts): ServerResult {
     next();
   });
 
-  app.get("/health", wrapHandler(async (_req, res) => {
-    let horizonConnected = false;
-    try {
-      await client.horizon.root();
-      horizonConnected = true;
-    } catch {
-      horizonConnected = false;
-    }
+  app.get(
+    "/health",
+    wrapHandler(async (_req, res) => {
+      let horizonConnected = false;
+      try {
+        await client.horizon.root();
+        horizonConnected = true;
+      } catch {
+        horizonConnected = false;
+      }
 
-    res.json({
-      status: "ok",
-      horizonConnected,
-      network: client.config.network,
-      version: "0.1.0",
-    });
-  }));
+      res.json({
+        status: "ok",
+        horizonConnected,
+        network: client.config.network,
+        version: "0.1.0",
+      });
+    }),
+  );
 
-  app.get("/metrics", wrapHandler(async (_req: Request, res: Response) => {
-    res.setHeader("Content-Type", register.contentType);
-    res.send(await register.metrics());
-  }));
+  app.get(
+    "/metrics",
+    wrapHandler(async (_req: Request, res: Response) => {
+      res.setHeader("Content-Type", register.contentType);
+      res.send(await register.metrics());
+    }),
+  );
 
-  app.get("/sponsor/status", wrapHandler(async (_req: Request, res: Response) => {
-    const status = await sponsorMonitorService.checkBalance();
-    res.json(status);
-  }));
+  app.get(
+    "/sponsor/status",
+    wrapHandler(async (_req: Request, res: Response) => {
+      const status = await sponsorMonitorService.checkBalance();
+      res.json(status);
+    }),
+  );
 
-  app.post("/cosign", wrapHandler(async (req: Request, res: Response) => {
-    const timer = policyEvaluationDurationSeconds.startTimer();
-    try {
-      const parsed = CosignRequestSchema.safeParse(req.body);
+  app.post(
+    "/cosign",
+    cosignFeeBumpLimiter,
+    wrapHandler(async (req: Request, res: Response) => {
+      const timer = policyEvaluationDurationSeconds.startTimer();
+      try {
+        const parsed = CosignRequestSchema.safeParse(req.body);
+        if (!parsed.success) {
+          cosignRequestsTotal.inc({ status: "rejected" });
+          throw new ValidationError("Validation failed", parsed.error.flatten().fieldErrors);
+        }
+
+        const result = await cosignerService.cosign(parsed.data);
+
+        if (!result.approved) {
+          cosignRequestsTotal.inc({ status: "rejected" });
+          throw new PolicyError(result.reason ?? "Transaction denied by policy");
+        }
+
+        cosignRequestsTotal.inc({ status: "approved" });
+        res.json({ signedXdr: result.signedXdr });
+      } catch (err) {
+        if (!(err instanceof ValidationError) && !(err instanceof PolicyError)) {
+          cosignRequestsTotal.inc({ status: "rejected" });
+        }
+        throw err;
+      } finally {
+        timer();
+      }
+    }),
+  );
+
+  app.post(
+    "/fee-bump",
+    cosignFeeBumpLimiter,
+    wrapHandler(async (req: Request, res: Response) => {
+      feeBumpRequestsTotal.inc();
+      const parsed = FeeBumpRequestSchema.safeParse(req.body);
       if (!parsed.success) {
-        cosignRequestsTotal.inc({ status: "rejected" });
         throw new ValidationError("Validation failed", parsed.error.flatten().fieldErrors);
       }
 
-      const result = await cosignerService.cosign(parsed.data);
+      const feeBumpXdr = await feeSponsorService.wrapFeeBump(parsed.data.xdr);
+      res.json({ feeBumpXdr });
+    }),
+  );
 
-      if (!result.approved) {
-        cosignRequestsTotal.inc({ status: "rejected" });
-        throw new PolicyError(result.reason ?? "Transaction denied by policy");
+  app.post(
+    "/fee-bump/submit",
+    cosignFeeBumpLimiter,
+    wrapHandler(async (req: Request, res: Response) => {
+      feeBumpRequestsTotal.inc();
+      const parsed = FeeBumpRequestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new ValidationError("Validation failed", parsed.error.flatten().fieldErrors);
       }
 
-      cosignRequestsTotal.inc({ status: "approved" });
-      res.json({ signedXdr: result.signedXdr });
-    } catch (err) {
-      if (!(err instanceof ValidationError) && !(err instanceof PolicyError)) {
-        cosignRequestsTotal.inc({ status: "rejected" });
-      }
-      throw err;
-    } finally {
-      timer();
-    }
-  }));
-
-  app.post("/fee-bump", wrapHandler(async (req: Request, res: Response) => {
-    feeBumpRequestsTotal.inc();
-    const parsed = FeeBumpRequestSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError("Validation failed", parsed.error.flatten().fieldErrors);
-    }
-
-    const feeBumpXdr = await feeSponsorService.wrapFeeBump(parsed.data.xdr);
-    res.json({ feeBumpXdr });
-  }));
-
-  app.post("/fee-bump/submit", wrapHandler(async (req: Request, res: Response) => {
-    feeBumpRequestsTotal.inc();
-    const parsed = FeeBumpRequestSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError("Validation failed", parsed.error.flatten().fieldErrors);
-    }
-
-    const result = await feeSponsorService.submit(parsed.data.xdr);
-    res.json(result);
-  }));
+      const result = await feeSponsorService.submit(parsed.data.xdr);
+      res.json(result);
+    }),
+  );
 
   app.get("/policy/:walletId", (req: Request, res: Response) => {
     const policy = policyEngine.getPolicy(req.params.walletId as string);
@@ -222,52 +310,59 @@ export function createServer(opts: ServerOpts): ServerResult {
     res.json(policy);
   });
 
-  app.post("/policy", wrapHandler(async (req: Request, res: Response) => {
-    const parsed = PolicyRequestSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError("Validation failed", parsed.error.flatten().fieldErrors);
-    }
+  app.post(
+    "/policy",
+    wrapHandler(async (req: Request, res: Response) => {
+      const parsed = PolicyRequestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new ValidationError("Validation failed", parsed.error.flatten().fieldErrors);
+      }
 
-    const policy = {
-      id: crypto.randomUUID(),
-      walletId: parsed.data.walletId,
-      rules: parsed.data.rules,
-      createdAt: new Date(),
-    };
+      const policy = {
+        id: crypto.randomUUID(),
+        walletId: parsed.data.walletId,
+        rules: parsed.data.rules,
+        createdAt: new Date(),
+      };
 
-    policyEngine.addPolicy(policy);
-    res.json(policy);
-  }));
+      policyEngine.addPolicy(policy);
+      res.json(policy);
+    }),
+  );
 
-  app.post("/wallet/create", wrapHandler(async (req: Request, res: Response) => {
-    const { Wallet } = await import("@lumen/core");
+  app.post(
+    "/wallet/create",
+    wrapHandler(async (req: Request, res: Response) => {
+      const { Wallet } = await import("@lumen/core");
 
-    const sponsorKeypair = Keypair.fromPublicKey(
-      opts.cosignerSigner.publicKey()
-    );
-    const wallet = new Wallet({
-      client,
-      sponsorKeypair,
-      serverPublicKey: opts.cosignerSigner.publicKey(),
-    });
+      const sponsorKeypair = Keypair.fromPublicKey(opts.cosignerSigner.publicKey());
+      const wallet = new Wallet({
+        client,
+        sponsorKeypair,
+        serverPublicKey: opts.cosignerSigner.publicKey(),
+      });
 
-    const result = await wallet.create();
-    res.json({ address: result.address, publicKey: result.publicKey });
-  }));
+      const result = await wallet.create();
+      res.json({ address: result.address, publicKey: result.publicKey });
+    }),
+  );
 
-  app.post("/webhooks", wrapHandler(async (req: Request, res: Response) => {
-    const parsed = WebhookRequestSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new ValidationError("Validation failed", parsed.error.flatten().fieldErrors);
-    }
-    const { id: bodyId, url, secret, events, enabled } = parsed.data;
-    const id = bodyId ?? crypto.randomUUID();
-    webhookDispatcher.register({ id, url, secret, events, enabled: enabled ?? true });
-    res.status(201).json({ id, url, events, enabled: enabled ?? true });
-  }));
+  app.post(
+    "/webhooks",
+    wrapHandler(async (req: Request, res: Response) => {
+      const parsed = WebhookRequestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new ValidationError("Validation failed", parsed.error.flatten().fieldErrors);
+      }
+      const { id: bodyId, url, secret, events, enabled } = parsed.data;
+      const id = bodyId ?? crypto.randomUUID();
+      webhookDispatcher.register({ id, url, secret, events, enabled: enabled ?? true });
+      res.status(201).json({ id, url, events, enabled: enabled ?? true });
+    }),
+  );
 
   app.get("/webhooks", (_req: Request, res: Response) => {
-    res.json(webhookDispatcher.list().map(({ secret, ...rest }) => rest));
+    res.json(webhookDispatcher.list().map(({ secret: _secret, ...rest }) => rest));
   });
 
   app.delete("/webhooks/:id", (req: Request, res: Response) => {
@@ -285,7 +380,10 @@ export function createServer(opts: ServerOpts): ServerResult {
 
   server.listen(port, () => {
     logger.info({ port, network: client.config.network }, `Lumen server listening on port ${port}`);
-    logger.info({ cosigner: opts.cosignerSigner.publicKey(), feePayer: opts.feePayerSigner.publicKey() }, "Signer addresses initialized");
+    logger.info(
+      { cosigner: opts.cosignerSigner.publicKey(), feePayer: opts.feePayerSigner.publicKey() },
+      "Signer addresses initialized",
+    );
   });
 
   const gracefulShutdown = (signal: string) => {

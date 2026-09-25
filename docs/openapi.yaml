@@ -311,6 +311,18 @@ components:
       required:
         - type
         - destinations
+    MaxOperationsRule:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [max_operations]
+        maxOperations:
+          type: integer
+          example: 5
+      required:
+        - type
+        - maxOperations
     Policy:
       type: object
       properties:
@@ -331,3 +343,12 @@ components:
         - id
         - walletId
         - rules
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API Key
+      description: "API key passed in the Authorization: Bearer <api-key> header"
+security:
+  - bearerAuth: []
+

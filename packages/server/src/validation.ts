@@ -3,11 +3,9 @@ import { z } from "zod";
 
 export const CosignRequestSchema = z.object({
   xdr: z.string().min(1, "xdr is required"),
-  walletAddress: z
-    .string()
-    .refine((val) => StrKey.isValidEd25519PublicKey(val), {
-      message: "walletAddress must be a valid Stellar public key",
-    }),
+  walletAddress: z.string().refine((val) => StrKey.isValidEd25519PublicKey(val), {
+    message: "walletAddress must be a valid Stellar public key",
+  }),
 });
 
 export const FeeBumpRequestSchema = z.object({
@@ -29,13 +27,21 @@ const VelocityRuleSchema = z.object({
 
 const AllowlistRuleSchema = z.object({
   type: z.literal("allowlist"),
-  destinations: z.array(z.string().startsWith("G", "destination must be a valid Stellar public key")).min(1, "At least one destination is required"),
+  destinations: z
+    .array(z.string().startsWith("G", "destination must be a valid Stellar public key"))
+    .min(1, "At least one destination is required"),
+});
+
+const MaxOperationsRuleSchema = z.object({
+  type: z.literal("max_operations"),
+  maxOperations: z.number().int().positive("maxOperations must be a positive integer"),
 });
 
 const PolicyRuleSchema = z.discriminatedUnion("type", [
   SpendLimitSchema,
   VelocityRuleSchema,
   AllowlistRuleSchema,
+  MaxOperationsRuleSchema,
 ]);
 
 export const PolicyRequestSchema = z.object({
