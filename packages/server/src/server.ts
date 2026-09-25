@@ -389,6 +389,19 @@ export function createServer(opts: ServerOpts): ServerResult {
     }),
   );
 
+  app.get(
+    "/wallet/:address/balance",
+    wrapHandler(async (req: Request, res: Response) => {
+      const address = req.params.address as string;
+      if (!StrKey.isValidEd25519PublicKey(address)) {
+        throw new ValidationError("address must be a valid Stellar public key");
+      }
+
+      const account = await client.horizon.loadAccount(address);
+      res.json({ address, balances: account.balances });
+    }),
+  );
+
   app.post(
     "/webhooks",
     wrapHandler(async (req: Request, res: Response) => {

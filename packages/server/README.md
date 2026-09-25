@@ -89,6 +89,7 @@ pnpm --filter @lumen/server clean
 |---|---|---|
 | `POST` | `/wallet/create` | Sponsors account creation and configures 2-of-2 multisig |
 | `GET` | `/wallet/:address/transactions` | Retrieves a wallet's recent Stellar transactions (`limit` and `cursor` supported) |
+| `GET` | `/wallet/:address/balance` | Retrieves a wallet's native and trustline balances |
 | `POST` | `/cosign` | Validates transaction against policy and appends co-signer signature |
 | `POST` | `/fee-bump` | Wraps transaction in a fee-bump envelope signed by fee-payer |
 | `GET` | `/policy/:walletId` | Retrieves the active policy spec for a wallet |

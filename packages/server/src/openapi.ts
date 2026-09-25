@@ -239,6 +239,40 @@ export const openApiSpec = {
         },
       },
     },
+    "/wallet/{address}/balance": {
+      get: {
+        summary: "Get Wallet Balance",
+        description:
+          "Retrieves the Stellar account balances for a wallet from Horizon, including native and trustline assets.",
+        parameters: [
+          {
+            name: "address",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+            description: "Stellar public key address of the wallet.",
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Wallet balances",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    address: { type: "string" },
+                    balances: { type: "array", items: { type: "object" } },
+                  },
+                  required: ["address", "balances"],
+                },
+              },
+            },
+          },
+          "400": { description: "Invalid wallet address" },
+        },
+      },
+    },
     "/policy": {
       post: {
         summary: "Create or Update Wallet Policy",

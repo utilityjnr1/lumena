@@ -14,6 +14,7 @@ describe("OpenAPI Specification", () => {
     expect(paths).toContain("/fee-bump/submit");
     expect(paths).toContain("/wallet/create");
     expect(paths).toContain("/wallet/{address}/transactions");
+    expect(paths).toContain("/wallet/{address}/balance");
     expect(paths).toContain("/policy");
     expect(paths).toContain("/policy/{walletId}");
   });
