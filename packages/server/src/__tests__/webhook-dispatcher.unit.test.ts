@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { WebhookDispatcher } from "../webhook/dispatcher.js";
 import { createHmac } from "node:crypto";
 
@@ -64,13 +64,40 @@ describe("WebhookDispatcher Unit Tests", () => {
         headers: expect.objectContaining({
           "X-Lumen-Event": "balance.low",
         }),
-      })
+      }),
     );
 
     // Dispatch cosigned event -> both should receive
     fetchMock.mockClear();
     await dispatcher.dispatch("transaction.cosigned", { txHash: "1234" });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("dispatches wallet.created to matching webhook subscriptions", async () => {
+    const dispatcher = new WebhookDispatcher({ maxRetries: 0 });
+    const fetchMock = vi.fn().mockResolvedValue(new Response("ok", { status: 200 }));
+    globalThis.fetch = fetchMock;
+
+    dispatcher.register({
+      id: "wh-wallet-created",
+      url: "https://example.com/wallets",
+      secret,
+      events: ["wallet.created"],
+    });
+
+    const results = await dispatcher.dispatch("wallet.created", {
+      address: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+      publicKey: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].success).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://example.com/wallets",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "X-Lumen-Event": "wallet.created" }),
+      }),
+    );
   });
 
   it("retries failed deliveries up to maxRetries on 500 error", async () => {

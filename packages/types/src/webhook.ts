@@ -1,4 +1,5 @@
 export type WebhookEventType =
+  | "wallet.created"
   | "transaction.cosigned"
   | "transaction.sponsored"
   | "policy.violated"

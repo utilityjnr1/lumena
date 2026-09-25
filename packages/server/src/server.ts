@@ -343,6 +343,14 @@ export function createServer(opts: ServerOpts): ServerResult {
       });
 
       const result = await wallet.create();
+      void webhookDispatcher
+        .dispatch("wallet.created", {
+          address: result.address,
+          publicKey: result.publicKey,
+        })
+        .catch((error: unknown) => {
+          logger.error({ error }, "Failed to dispatch wallet.created webhook");
+        });
       res.json({ address: result.address, publicKey: result.publicKey });
     }),
   );
