@@ -38,8 +38,11 @@ import { SponsorMonitorService } from "./fee-sponsor/monitor.js";
 import { WebhookDispatcher } from "./webhook/dispatcher.js";
 
 export interface ServerResult {
+  /** Configured Express application. */
   app: Express;
+  /** Node HTTP server wrapping the Express application. */
   server: HttpServer;
+  /** Stellar/Horizon/RPC client used by server services. */
   client: StellarClient;
   cosignerService: CosignerService;
   feeSponsorService: FeeSponsorService;
@@ -49,7 +52,9 @@ export interface ServerResult {
 }
 
 export interface ServerOpts {
+  /** Port used by the HTTP server. Defaults to 3000. */
   port?: number;
+  /** Stellar network preset used for Horizon/RPC defaults. */
   network?: "testnet" | "mainnet" | "local";
   horizonUrl?: string;
   rpcUrl?: string;
@@ -73,6 +78,7 @@ export interface ServerOpts {
   cors?: CorsOptions;
 }
 
+/** Creates the Lumen API server, service graph, and policy engine. */
 export function createServer(opts: ServerOpts): ServerResult {
   const port = opts.port ?? 3000;
 

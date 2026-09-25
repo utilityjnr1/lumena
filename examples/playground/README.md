@@ -50,3 +50,7 @@ examples/playground/
 ├── vite.config.ts       # Vite bundler configuration
 └── README.md            # Setup documentation
 ```
+
+## Full Wallet Flow
+
+Use the playground to create a wallet, inspect its funded account address, configure a policy, submit a sponsored payment, and review the live log output. Keep `@lumen/server` running while using the playground because co-signing and fee-bump submission are server-backed flows.
