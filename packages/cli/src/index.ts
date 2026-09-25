@@ -6,7 +6,9 @@ const program = new Command();
 
 program
   .name("lumen")
-  .description("Administrative CLI for managing Lumen wallets, policies, sponsor balances, and cosigning")
+  .description(
+    "Administrative CLI for managing Lumen wallets, policies, sponsor balances, and cosigning",
+  )
   .version("0.1.0");
 
 const DEFAULT_SERVER_URL = process.env.LUMEN_SERVER_URL || "http://localhost:3000";
@@ -143,12 +145,18 @@ walletCmd
     }
   });
 
-const cosignCmd = program.command("cosign").description("Cosigning and transaction inspection tools");
+const cosignCmd = program
+  .command("cosign")
+  .description("Cosigning and transaction inspection tools");
 
 cosignCmd
   .command("inspect <xdr>")
   .description("Decodes transaction XDR and simulates policy check")
-  .option("-n, --network-passphrase <passphrase>", "Stellar Network Passphrase", "Test SDF Network ; July 2015")
+  .option(
+    "-n, --network-passphrase <passphrase>",
+    "Stellar Network Passphrase",
+    "Test SDF Network ; July 2015",
+  )
   .action((xdr, options) => {
     try {
       const tx = TransactionBuilder.fromXDR(xdr, options.networkPassphrase);
@@ -166,6 +174,32 @@ cosignCmd
       }
     } catch (err: any) {
       console.error("Error decoding transaction XDR:", err.message || err);
+      process.exit(1);
+    }
+  });
+
+cosignCmd
+  .command("submit <xdr> <walletAddress>")
+  .description("Submit transaction XDR to the server for policy validation and cosigning")
+  .option("-s, --server <url>", "Lumen server URL", DEFAULT_SERVER_URL)
+  .action(async (xdr, walletAddress, options) => {
+    try {
+      const res = await fetch(`${options.server}/cosign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ xdr, walletAddress }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Cosign request failed: HTTP ${res.status} - ${errText}`);
+      }
+
+      const result = await res.json();
+      console.log("Transaction cosigned successfully:");
+      console.log(JSON.stringify(result, null, 2));
+    } catch (err: any) {
+      console.error("Error submitting transaction for cosigning:", err.message || err);
       process.exit(1);
     }
   });

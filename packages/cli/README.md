@@ -53,6 +53,13 @@ Decodes transaction XDR, displays operation details, and simulates policy checks
 npx @lumen/cli cosign inspect "AAAAAgAAA..."
 ```
 
+### 7. `lumen cosign submit <xdr> <walletAddress>`
+Submits a signed transaction XDR to the server's `/cosign` endpoint for policy validation and co-signing.
+
+```bash
+npx @lumen/cli cosign submit "AAAAAgAAA..." G...
+```
+
 ---
 
 ## Development
@@ -120,4 +127,3 @@ pnpm --filter @lumen/cli clean
 ## License
 
 MIT
-
