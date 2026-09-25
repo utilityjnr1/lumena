@@ -103,6 +103,22 @@ pnpm --filter @lumen/server clean
 
 ---
 
+## Webhook Signature Verification
+
+Webhook deliveries include an `X-Lumen-Signature` header containing an HMAC-SHA256
+signature. Consumers can verify it using the same shared secret configured for the webhook
+and the exact, unmodified request body:
+
+```typescript
+import { verifyWebhookSignature } from "@lumen/server";
+
+const valid = verifyWebhookSignature(rawRequestBody, signatureHeader, webhookSecret);
+```
+
+The helper returns `false` for malformed signatures or when the signature does not match.
+
+---
+
 ## Authentication & Security
 
 ### API Key Protection

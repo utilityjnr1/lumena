@@ -7,7 +7,11 @@ export {
 } from "./fee-sponsor/monitor.js";
 export { PolicyEngine } from "./policy/engine.js";
 export { InMemoryPolicyStore, RedisPolicyStore, FilePolicyStore } from "./policy/store.js";
-export { WebhookDispatcher, type WebhookDispatcherOpts } from "./webhook/dispatcher.js";
+export {
+  WebhookDispatcher,
+  verifyWebhookSignature,
+  type WebhookDispatcherOpts,
+} from "./webhook/dispatcher.js";
 export { createServer, type ServerOpts, type ServerResult } from "./server.js";
 export { EnvSigner } from "./signers/EnvSigner.js";
 export { AwsKmsSigner } from "./signers/AwsKmsSigner.js";
