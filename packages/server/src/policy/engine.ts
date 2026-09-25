@@ -7,6 +7,7 @@ import type {
   AllowlistRule,
   SessionKeyPolicyRule,
   TimeBoundsRule,
+  MaxOperationsRule,
 } from "@lumen/types";
 import { validateTimeBounds } from "@lumen/core";
 
@@ -74,6 +75,8 @@ export class PolicyEngine {
         return this.evaluateSessionKey(rule as SessionKeyPolicyRule, opts);
       case "timebounds":
         return this.evaluateTimeBounds(rule as TimeBoundsRule, opts);
+      case "max_operations":
+        return this.evaluateMaxOperations(rule as MaxOperationsRule, opts);
       default:
         return { approved: true };
     }
@@ -235,6 +238,25 @@ export class PolicyEngine {
 
     if (!result.valid) {
       return { approved: false, reason: result.reason };
+    }
+
+    return { approved: true };
+  }
+
+  evaluateMaxOperations(
+    rule: MaxOperationsRule,
+    optsOrTx: EvaluateOpts | Transaction | { operations: unknown[] },
+  ): EvaluateResult {
+    const tx =
+      "transaction" in optsOrTx
+        ? (optsOrTx as EvaluateOpts).transaction
+        : (optsOrTx as { operations: unknown[] });
+    const opCount = tx?.operations?.length ?? 0;
+    if (opCount > rule.maxOperations) {
+      return {
+        approved: false,
+        reason: `Transaction operation count ${opCount} exceeds limit of ${rule.maxOperations}`,
+      };
     }
 
     return { approved: true };

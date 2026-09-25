@@ -21,6 +21,12 @@ describe("OpenAPI Specification", () => {
     expect(openApiSpec.components.schemas).toHaveProperty("SpendLimitRule");
     expect(openApiSpec.components.schemas).toHaveProperty("VelocityRule");
     expect(openApiSpec.components.schemas).toHaveProperty("AllowlistRule");
+    expect(openApiSpec.components.schemas).toHaveProperty("MaxOperationsRule");
     expect(openApiSpec.components.schemas).toHaveProperty("Policy");
+  });
+
+  it("defines bearerAuth security scheme and security requirement", () => {
+    expect(openApiSpec.components.securitySchemes).toHaveProperty("bearerAuth");
+    expect(openApiSpec.security).toContainEqual({ bearerAuth: [] });
   });
 });

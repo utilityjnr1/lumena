@@ -102,6 +102,63 @@ pnpm --filter @lumen/server clean
 
 ---
 
+## Authentication & Security
+
+### API Key Protection
+To protect server endpoints in non-localhost deployments, configure the `apiKey` option in `ServerOpts` (or set `API_KEY` in your environment):
+
+```typescript
+import { createServer } from "@lumen/server";
+
+const { app } = createServer({
+  // ...
+  apiKey: process.env.API_KEY, // e.g. "secret-token-xyz"
+});
+```
+
+When `apiKey` is set:
+- All routes **except** `/health` and `/metrics` require an `Authorization` header:
+  ```http
+  Authorization: Bearer <api-key>
+  ```
+- If the header is missing, malformed, or contains an invalid key, the server responds with:
+  ```json
+  HTTP/1.1 401 Unauthorized
+  { "error": "Unauthorized" }
+  ```
+- `/health` and `/metrics` remain open for liveness probes, monitoring, and load balancer health checks.
+
+### Rate Limiting
+The server includes built-in rate limiting powered by `express-rate-limit` on the `/cosign` and `/fee-bump` endpoints to prevent DoS attacks and protect sponsor funds.
+
+Configure `windowMs` and `max` in `ServerOpts` (or via `RATE_LIMIT_WINDOW_MS` and `RATE_LIMIT_MAX` environment variables):
+
+```typescript
+const { app } = createServer({
+  // ...
+  windowMs: 60 * 1000, // 1 minute window (default: 60000ms)
+  max: 100,            // max requests per window per IP (default: 100)
+});
+```
+
+When the limit is exceeded, the server returns:
+```json
+HTTP/1.1 429 Too Many Requests
+{ "error": "Too Many Requests" }
+```
+
+### Policy Stores & Persistence
+In addition to `InMemoryPolicyStore` and `RedisPolicyStore`, `@lumen/server` provides `FilePolicyStore` to persist policies across server restarts using a local JSON file:
+
+```typescript
+import { FilePolicyStore } from "@lumen/server";
+
+const policyStore = new FilePolicyStore("./data/policies.json");
+```
+`FilePolicyStore` atomically writes updates on `savePolicy` and `deletePolicy` calls and reloads existing policies upon startup.
+
+---
+
 ## License
 
 MIT

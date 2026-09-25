@@ -158,6 +158,21 @@ curl http://localhost:3000/wallet/create \
 
 ---
 
+## Server Security & Configuration
+
+### API Key Middleware
+To safeguard server endpoints in non-localhost deployments, configure `apiKey` in `ServerOpts` or supply `API_KEY` in your environment:
+- Protects all endpoints (`/cosign`, `/fee-bump`, `/policy`, etc.) by enforcing an `Authorization: Bearer <api-key>` header.
+- Returns `401 Unauthorized` (`{ "error": "Unauthorized" }`) if the key is missing or invalid.
+- `/health` and `/metrics` are exempt to permit uptime probes and metric scraping.
+
+### Rate Limiting
+Endpoint protection against spam and denial-of-service on `/cosign` and `/fee-bump` using `express-rate-limit`:
+- Configurable via `windowMs` and `max` in `ServerOpts` (or `RATE_LIMIT_WINDOW_MS` / `RATE_LIMIT_MAX` environment variables).
+- Exceeding the rate limit returns `429 Too Many Requests` (`{ "error": "Too Many Requests" }`).
+
+---
+
 ## Contributing & Open Issues
 
 We welcome open-source contributions! Check out our [Open Issues Directory](ISSUES.md) or browse our active [GitHub Issues](https://github.com/utilityjnr1/lumena/issues) to find tasks available to work on:
