@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { PolicyEngine } from "../policy/engine.js";
 import {
   createAllowlistPolicy,
+  createBlocklistPolicy,
   createSpendLimitPolicy,
   createTimeBoundsPolicy,
   createVelocityPolicy,
@@ -38,6 +39,29 @@ describe("PolicyEngine Multi-Op & Asset Spend Limits", () => {
     const res2 = await engine.evaluate({ walletAddress: walletId, transaction: invalidTx });
     expect(res2.approved).toBe(false);
     expect(res2.reason).toContain("GBADDESTINATION is not on the allowlist");
+  });
+
+  describe("PolicyEngine Blocklist", () => {
+    const walletId = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
+
+    it("rejects transactions with a blocked destination and approves other destinations", () => {
+      const engine = new PolicyEngine();
+      engine.addPolicy(createBlocklistPolicy(walletId, ["GBLOCKED"]));
+
+      const allowedTx = {
+        operations: [{ type: "payment", destination: "GOTHER", amount: "10" }],
+      } as unknown as Transaction;
+      expect(engine.evaluate({ walletAddress: walletId, transaction: allowedTx }).approved).toBe(
+        true,
+      );
+
+      const blockedTx = {
+        operations: [{ type: "payment", destination: "GBLOCKED", amount: "10" }],
+      } as unknown as Transaction;
+      const result = engine.evaluate({ walletAddress: walletId, transaction: blockedTx });
+      expect(result.approved).toBe(false);
+      expect(result.reason).toContain("GBLOCKED is on the blocklist");
+    });
   });
 
   it("evaluates pathPaymentStrictSend and pathPaymentStrictReceive operations", async () => {

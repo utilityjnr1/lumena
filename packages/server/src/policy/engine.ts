@@ -5,6 +5,7 @@ import type {
   SpendLimit,
   VelocityRule,
   AllowlistRule,
+  BlocklistRule,
   SessionKeyPolicyRule,
   TimeBoundsRule,
   MaxOperationsRule,
@@ -71,6 +72,8 @@ export class PolicyEngine {
         return this.evaluateVelocity(rule as VelocityRule, opts);
       case "allowlist":
         return this.evaluateAllowlist(rule as AllowlistRule, opts);
+      case "blocklist":
+        return this.evaluateBlocklist(rule as BlocklistRule, opts);
       case "session_key":
         return this.evaluateSessionKey(rule as SessionKeyPolicyRule, opts);
       case "timebounds":
@@ -195,6 +198,22 @@ export class PolicyEngine {
           return {
             approved: false,
             reason: `Destination ${destination} is not on the allowlist`,
+          };
+        }
+      }
+    }
+
+    return { approved: true };
+  }
+
+  private evaluateBlocklist(rule: BlocklistRule, opts: EvaluateOpts): EvaluateResult {
+    for (const op of opts.transaction.operations) {
+      if ("destination" in op && op.destination) {
+        const destination = op.destination.toString();
+        if (rule.destinations.includes(destination)) {
+          return {
+            approved: false,
+            reason: `Destination ${destination} is on the blocklist`,
           };
         }
       }
