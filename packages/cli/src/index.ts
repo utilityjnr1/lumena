@@ -1,12 +1,14 @@
 import { Command } from "commander";
-import { TransactionBuilder } from "@stellar/stellar-sdk";
+import { StrKey, TransactionBuilder } from "@stellar/stellar-sdk";
 import fs from "node:fs";
 
 const program = new Command();
 
 program
   .name("lumen")
-  .description("Administrative CLI for managing Lumen wallets, policies, sponsor balances, and cosigning")
+  .description(
+    "Administrative CLI for managing Lumen wallets, policies, sponsor balances, and cosigning",
+  )
   .version("0.1.0");
 
 const DEFAULT_SERVER_URL = process.env.LUMEN_SERVER_URL || "http://localhost:3000";
@@ -143,12 +145,42 @@ walletCmd
     }
   });
 
-const cosignCmd = program.command("cosign").description("Cosigning and transaction inspection tools");
+walletCmd
+  .command("fund <address>")
+  .description("Funds a wallet on Stellar testnet using Friendbot")
+  .action(async (address: string) => {
+    try {
+      if (!StrKey.isValidEd25519PublicKey(address)) {
+        throw new Error("Invalid Stellar public key");
+      }
+
+      const res = await fetch(`https://friendbot.stellar.org/?addr=${encodeURIComponent(address)}`);
+      if (!res.ok) {
+        const details = await res.text();
+        throw new Error(
+          `Friendbot funding failed: HTTP ${res.status}${details ? ` - ${details}` : ""}`,
+        );
+      }
+
+      console.log(`Funded ${address} on Stellar testnet.`);
+    } catch (err: unknown) {
+      console.error("Error funding wallet:", err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+  });
+
+const cosignCmd = program
+  .command("cosign")
+  .description("Cosigning and transaction inspection tools");
 
 cosignCmd
   .command("inspect <xdr>")
   .description("Decodes transaction XDR and simulates policy check")
-  .option("-n, --network-passphrase <passphrase>", "Stellar Network Passphrase", "Test SDF Network ; July 2015")
+  .option(
+    "-n, --network-passphrase <passphrase>",
+    "Stellar Network Passphrase",
+    "Test SDF Network ; July 2015",
+  )
   .action((xdr, options) => {
     try {
       const tx = TransactionBuilder.fromXDR(xdr, options.networkPassphrase);

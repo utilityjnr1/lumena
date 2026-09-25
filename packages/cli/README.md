@@ -46,7 +46,14 @@ Triggers creation of a new test sponsored wallet on the server.
 npx @lumen/cli wallet create
 ```
 
-### 6. `lumen cosign inspect <xdr>`
+### 6. `lumen wallet fund <address>`
+Funds a Stellar testnet account using Friendbot. Provide the account's public key:
+
+```bash
+npx @lumen/cli wallet fund G...
+```
+
+### 7. `lumen cosign inspect <xdr>`
 Decodes transaction XDR, displays operation details, and simulates policy checks.
 
 ```bash
@@ -120,4 +127,3 @@ pnpm --filter @lumen/cli clean
 ## License
 
 MIT
-
