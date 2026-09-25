@@ -30,7 +30,12 @@ export interface Policy {
   createdAt: Date;     // Server creation timestamp
 }
 
-export type PolicyRule = SpendLimit | VelocityRule | AllowlistRule;
+export type PolicyRule =
+  | SpendLimit
+  | VelocityRule
+  | AllowlistRule
+  | SessionKeyPolicyRule
+  | TimeBoundsRule;
 
 /**
  * Limits spend amounts for specific assets.
@@ -57,6 +62,19 @@ export interface VelocityRule {
 export interface AllowlistRule {
   type: "allowlist";
   destinations: string[]; // List of allowed destination Stellar G... public keys
+}
+
+export interface SessionKeyPolicyRule {
+  type: "session_key";
+  sessionPublicKey: string;
+  maxSpend: string;
+  expiresAt: number;
+}
+
+export interface TimeBoundsRule {
+  type: "timebounds";
+  maxWindowSeconds?: number;
+  allowUnbounded?: boolean;
 }
 ```
 
