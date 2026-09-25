@@ -46,3 +46,13 @@ export const PolicyRequestSchema = z.object({
 export type CosignRequest = z.infer<typeof CosignRequestSchema>;
 export type FeeBumpRequest = z.infer<typeof FeeBumpRequestSchema>;
 export type PolicyRequest = z.infer<typeof PolicyRequestSchema>;
+
+export const WebhookRequestSchema = z.object({
+  id: z.string().optional(),
+  url: z.string().url("url must be a valid URL"),
+  secret: z.string().min(1, "secret is required"),
+  events: z.array(z.string().min(1)).min(1, "at least one event is required"),
+  enabled: z.boolean().optional(),
+});
+
+export type WebhookRequest = z.infer<typeof WebhookRequestSchema>;

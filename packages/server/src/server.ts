@@ -4,6 +4,7 @@ import express, {
   type Response,
   type NextFunction,
 } from "express";
+import cors, { type CorsOptions } from "cors";
 import { createServer as createHttpServer, type Server as HttpServer, type RequestListener, type IncomingMessage } from "node:http";
 import { Keypair } from "@stellar/stellar-sdk";
 import { StellarClient } from "@lumen/core";
@@ -15,6 +16,7 @@ import {
   CosignRequestSchema,
   FeeBumpRequestSchema,
   PolicyRequestSchema,
+  WebhookRequestSchema,
 } from "./validation.js";
 import swaggerUi from "swagger-ui-express";
 import { openApiSpec } from "./openapi.js";
@@ -64,6 +66,11 @@ export interface ServerOpts {
   minSponsorBalance?: number;
   sponsorPollIntervalMs?: number;
   webhookDispatcher?: WebhookDispatcher;
+  /**
+   * Optional CORS configuration passed to the `cors` npm package.
+   * Defaults to allowing all origins if omitted.
+   */
+  cors?: CorsOptions;
 }
 
 export function createServer(opts: ServerOpts): ServerResult {
@@ -104,16 +111,12 @@ export function createServer(opts: ServerOpts): ServerResult {
   });
   app.use(express.json());
 
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-request-id");
-    if (req.method === "OPTIONS") {
-      res.sendStatus(204);
-      return;
-    }
-    next();
-  });
+  const corsOptions: CorsOptions = opts.cors ?? {
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-request-id"],
+  };
+  app.use(cors(corsOptions));
 
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.id) {
@@ -253,12 +256,13 @@ export function createServer(opts: ServerOpts): ServerResult {
   }));
 
   app.post("/webhooks", wrapHandler(async (req: Request, res: Response) => {
-    const { url, secret, events, enabled } = req.body;
-    if (!url || !secret || !Array.isArray(events)) {
-      throw new ValidationError("url, secret, and events array are required");
+    const parsed = WebhookRequestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError("Validation failed", parsed.error.flatten().fieldErrors);
     }
-    const id = req.body.id || crypto.randomUUID();
-    webhookDispatcher.register({ id, url, secret, events, enabled });
+    const { id: bodyId, url, secret, events, enabled } = parsed.data;
+    const id = bodyId ?? crypto.randomUUID();
+    webhookDispatcher.register({ id, url, secret, events, enabled: enabled ?? true });
     res.status(201).json({ id, url, events, enabled: enabled ?? true });
   }));
 

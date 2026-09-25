@@ -12,6 +12,12 @@ export interface WalletOpts {
   sponsorKeypair: Keypair;
   serverPublicKey: string;
   ownerKeypair?: Keypair;
+  /**
+   * Optional KeyManager instance to inject. If not provided, a new default
+   * KeyManager is created internally. Inject a custom instance to use
+   * localStorage-backed storage or to facilitate unit testing.
+   */
+  keyManager?: KeyManager;
 }
 
 export interface WalletRegistry {
@@ -58,7 +64,7 @@ export class Wallet {
     this.sponsorKeypair = opts.sponsorKeypair;
     this.serverPublicKey = opts.serverPublicKey;
     this.initialOwnerKeypair = opts.ownerKeypair;
-    this.keyManager = new KeyManager();
+    this.keyManager = opts.keyManager ?? new KeyManager();
     if (opts.ownerKeypair) {
       this._keypair = opts.ownerKeypair;
     }
