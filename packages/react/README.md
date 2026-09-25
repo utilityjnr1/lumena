@@ -107,6 +107,17 @@ Returns the wallet associated with the supplied wallet ID.
 const { wallet, error, refetch } = useWallet(walletId);
 ```
 
+### `useCreateWalletWithPasskey()`
+
+Creates a wallet using a newly registered passkey and exposes loading, error, and result state.
+
+```tsx
+const { createWalletWithPasskey, loading, error, data } =
+  useCreateWalletWithPasskey();
+
+await createWalletWithPasskey({ username: "alice" });
+```
+
 ### `useBalance(walletId, assetCode?)`
 
 Fetches a wallet balance and automatically refreshes it every 10 seconds by default.
