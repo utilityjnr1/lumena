@@ -9,9 +9,10 @@ export type PolicyRule =
   | SpendLimit
   | VelocityRule
   | AllowlistRule
+  | BlocklistRule
   | SessionKeyPolicyRule
   | TimeBoundsRule
-  | DenyAllRule;
+  | MaxOperationsRule;
 
 export interface SpendLimit {
   type: "spend_limit";
@@ -31,6 +32,11 @@ export interface AllowlistRule {
   destinations: string[];
 }
 
+export interface BlocklistRule {
+  type: "blocklist";
+  destinations: string[];
+}
+
 export interface SessionKeyPolicyRule {
   type: "session_key";
   sessionPublicKey: string;
@@ -44,9 +50,9 @@ export interface TimeBoundsRule {
   allowUnbounded?: boolean;
 }
 
-export interface DenyAllRule {
-  type: "deny_all";
-  reason?: string;
+export interface MaxOperationsRule {
+  type: "max_operations";
+  maxOperations: number;
 }
 
 export interface PolicyStore {

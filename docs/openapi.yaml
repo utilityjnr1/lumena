@@ -149,6 +149,54 @@ paths:
                 required:
                   - address
                   - publicKey
+  /wallet/{address}/transactions:
+    get:
+      summary: Get Wallet Transaction History
+      description: Retrieves the most recent Stellar transactions for a wallet from Horizon. Results are ordered newest first and can be paginated with cursor.
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Stellar public key address of the wallet.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 20
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Horizon paging token from the previous response.
+      responses:
+        '200':
+          description: Wallet transaction history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  address:
+                    type: string
+                  transactions:
+                    type: array
+                    items:
+                      type: object
+                  nextCursor:
+                    type: string
+                    nullable: true
+                required:
+                  - address
+                  - transactions
+                  - nextCursor
+        '400':
+          description: Invalid wallet address or pagination parameter
   /wallet/{address}/analytics:
     get:
       summary: Get Wallet Spending Analytics
@@ -172,6 +220,36 @@ paths:
                 $ref: '#/components/schemas/WalletAnalytics'
         '401':
           description: Missing or invalid API key
+  /wallet/{address}/balance:
+    get:
+      summary: Get Wallet Balance
+      description: Retrieves the Stellar account balances for a wallet from Horizon, including native and trustline assets.
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Stellar public key address of the wallet.
+      responses:
+        '200':
+          description: Wallet balances
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  address:
+                    type: string
+                  balances:
+                    type: array
+                    items:
+                      type: object
+                required:
+                  - address
+                  - balances
+        '400':
+          description: Invalid wallet address
   /policy:
     post:
       summary: Create or Update Wallet Policy
@@ -311,6 +389,18 @@ components:
       required:
         - type
         - destinations
+    MaxOperationsRule:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [max_operations]
+        maxOperations:
+          type: integer
+          example: 5
+      required:
+        - type
+        - maxOperations
     Policy:
       type: object
       properties:
@@ -331,3 +421,11 @@ components:
         - id
         - walletId
         - rules
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API Key
+      description: "API key passed in the Authorization: Bearer <api-key> header"
+security:
+  - bearerAuth: []

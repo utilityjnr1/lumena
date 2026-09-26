@@ -33,7 +33,7 @@ async function buildSigners(): Promise<{ cosigner: Signer; feePayer: Signer }> {
   if (signerProvider !== "env") {
     logger.warn(
       `Unknown SIGNER_PROVIDER="${signerProvider}", falling back to "env". ` +
-        "Valid values: env, awskms."
+        "Valid values: env, awskms.",
     );
   }
 
@@ -44,7 +44,7 @@ async function buildSigners(): Promise<{ cosigner: Signer; feePayer: Signer }> {
     logger.error(
       "Missing COSIGNER_SECRET or FEE_PAYER_SECRET.\n" +
         "For production, set SIGNER_PROVIDER=awskms and configure KMS keys.\n" +
-        "See docs/production-key-management.md."
+        "See docs/production-key-management.md.",
     );
     process.exit(1);
   }
@@ -64,4 +64,9 @@ createServer({
   rpcUrl: process.env.SOROBAN_RPC_URL,
   cosignerSigner: cosigner,
   feePayerSigner: feePayer,
+  apiKey: process.env.API_KEY,
+  windowMs: process.env.RATE_LIMIT_WINDOW_MS
+    ? parseInt(process.env.RATE_LIMIT_WINDOW_MS)
+    : undefined,
+  max: process.env.RATE_LIMIT_MAX ? parseInt(process.env.RATE_LIMIT_MAX) : undefined,
 });

@@ -13,6 +13,8 @@ describe("OpenAPI Specification", () => {
     expect(paths).toContain("/fee-bump");
     expect(paths).toContain("/fee-bump/submit");
     expect(paths).toContain("/wallet/create");
+    expect(paths).toContain("/wallet/{address}/transactions");
+    expect(paths).toContain("/wallet/{address}/balance");
     expect(paths).toContain("/policy");
     expect(paths).toContain("/policy/{walletId}");
   });
@@ -21,6 +23,12 @@ describe("OpenAPI Specification", () => {
     expect(openApiSpec.components.schemas).toHaveProperty("SpendLimitRule");
     expect(openApiSpec.components.schemas).toHaveProperty("VelocityRule");
     expect(openApiSpec.components.schemas).toHaveProperty("AllowlistRule");
+    expect(openApiSpec.components.schemas).toHaveProperty("MaxOperationsRule");
     expect(openApiSpec.components.schemas).toHaveProperty("Policy");
+  });
+
+  it("defines bearerAuth security scheme and security requirement", () => {
+    expect(openApiSpec.components.securitySchemes).toHaveProperty("bearerAuth");
+    expect(openApiSpec.security).toContainEqual({ bearerAuth: [] });
   });
 });

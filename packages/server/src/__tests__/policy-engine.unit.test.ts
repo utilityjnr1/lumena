@@ -2,14 +2,34 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { PolicyEngine } from "../policy/engine.js";
 import {
   createAllowlistPolicy,
+  createBlocklistPolicy,
   createSpendLimitPolicy,
   createTimeBoundsPolicy,
   createVelocityPolicy,
+  createMaxOperationsPolicy,
 } from "../policy/rules.js";
+import type { MaxOperationsRule } from "@lumen/types";
 import type { Transaction } from "@stellar/stellar-sdk";
 
 describe("PolicyEngine Multi-Op & Asset Spend Limits", () => {
   const walletId = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
+
+  it("supports allow-by-default and deny-by-default for wallets without policies", () => {
+    const transaction = { operations: [] } as unknown as Transaction;
+
+    expect(
+      new PolicyEngine().evaluate({ walletAddress: walletId, transaction }),
+    ).toEqual({ approved: true });
+    expect(
+      new PolicyEngine({ defaultPolicy: "deny" }).evaluate({
+        walletAddress: walletId,
+        transaction,
+      }),
+    ).toEqual({
+      approved: false,
+      reason: `No policy found for wallet ${walletId}`,
+    });
+  });
 
   it("evaluates multiple payment operations in a single transaction against allowlist", async () => {
     const engine = new PolicyEngine();
@@ -36,6 +56,29 @@ describe("PolicyEngine Multi-Op & Asset Spend Limits", () => {
     const res2 = await engine.evaluate({ walletAddress: walletId, transaction: invalidTx });
     expect(res2.approved).toBe(false);
     expect(res2.reason).toContain("GBADDESTINATION is not on the allowlist");
+  });
+
+  describe("PolicyEngine Blocklist", () => {
+    const walletId = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
+
+    it("rejects transactions with a blocked destination and approves other destinations", () => {
+      const engine = new PolicyEngine();
+      engine.addPolicy(createBlocklistPolicy(walletId, ["GBLOCKED"]));
+
+      const allowedTx = {
+        operations: [{ type: "payment", destination: "GOTHER", amount: "10" }],
+      } as unknown as Transaction;
+      expect(engine.evaluate({ walletAddress: walletId, transaction: allowedTx }).approved).toBe(
+        true,
+      );
+
+      const blockedTx = {
+        operations: [{ type: "payment", destination: "GBLOCKED", amount: "10" }],
+      } as unknown as Transaction;
+      const result = engine.evaluate({ walletAddress: walletId, transaction: blockedTx });
+      expect(result.approved).toBe(false);
+      expect(result.reason).toContain("GBLOCKED is on the blocklist");
+    });
   });
 
   it("evaluates pathPaymentStrictSend and pathPaymentStrictReceive operations", async () => {
@@ -294,5 +337,71 @@ describe("PolicyEngine Velocity Limits", () => {
 
     const result = engine.evaluate({ walletAddress: walletId, transaction });
     expect(result.approved).toBe(true);
+  });
+
+  describe("MaxOperationsRule", () => {
+    it("approves transaction when operation count is within the maximum limit", () => {
+      const engine = new PolicyEngine();
+      engine.addPolicy(createMaxOperationsPolicy(walletId, 3));
+
+      const tx = {
+        operations: [
+          { type: "payment", destination: "GDEST1", amount: "10" },
+          { type: "payment", destination: "GDEST2", amount: "20" },
+        ],
+      } as unknown as Transaction;
+
+      const result = engine.evaluate({ walletAddress: walletId, transaction: tx });
+      expect(result.approved).toBe(true);
+    });
+
+    it("approves transaction when operation count exactly matches maximum limit", () => {
+      const engine = new PolicyEngine();
+      engine.addPolicy(createMaxOperationsPolicy(walletId, 2));
+
+      const tx = {
+        operations: [
+          { type: "payment", destination: "GDEST1", amount: "10" },
+          { type: "payment", destination: "GDEST2", amount: "20" },
+        ],
+      } as unknown as Transaction;
+
+      const result = engine.evaluate({ walletAddress: walletId, transaction: tx });
+      expect(result.approved).toBe(true);
+    });
+
+    it("rejects transaction when operation count exceeds maximum limit", () => {
+      const engine = new PolicyEngine();
+      engine.addPolicy(createMaxOperationsPolicy(walletId, 2));
+
+      const tx = {
+        operations: [
+          { type: "payment", destination: "GDEST1", amount: "10" },
+          { type: "payment", destination: "GDEST2", amount: "20" },
+          { type: "payment", destination: "GDEST3", amount: "30" },
+        ],
+      } as unknown as Transaction;
+
+      const result = engine.evaluate({ walletAddress: walletId, transaction: tx });
+      expect(result.approved).toBe(false);
+      expect(result.reason).toContain("exceeds limit of 2");
+    });
+
+    it("evaluates evaluateMaxOperations directly", () => {
+      const engine = new PolicyEngine();
+      const rule: MaxOperationsRule = { type: "max_operations", maxOperations: 1 };
+
+      const txAllowed = {
+        operations: [{ type: "payment" }],
+      } as unknown as Transaction;
+      expect(engine.evaluateMaxOperations(rule, txAllowed).approved).toBe(true);
+
+      const txDenied = {
+        operations: [{ type: "payment" }, { type: "payment" }],
+      } as unknown as Transaction;
+      const res = engine.evaluateMaxOperations(rule, txDenied);
+      expect(res.approved).toBe(false);
+      expect(res.reason).toContain("exceeds limit of 1");
+    });
   });
 });

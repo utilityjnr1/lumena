@@ -1,5 +1,8 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, it, expect, vi } from "vitest";
-import { InMemoryPolicyStore, RedisPolicyStore } from "../policy/store.js";
+import { InMemoryPolicyStore, RedisPolicyStore, FilePolicyStore } from "../policy/store.js";
 import type { Policy } from "@lumen/types";
 
 describe("InMemoryPolicyStore", () => {
@@ -72,5 +75,64 @@ describe("RedisPolicyStore", () => {
 
     const velRes = await store.recordVelocity("w1", Date.now(), 60000);
     expect(velRes).toBe(3);
+  });
+});
+
+describe("FilePolicyStore", () => {
+  it("persists policies across store instances using a local JSON file", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "lumen-policy-test-"));
+    const filePath = path.join(tmpDir, "policies.json");
+
+    try {
+      const store1 = new FilePolicyStore(filePath);
+      const policy: Policy = {
+        id: "p1",
+        walletId: "w1",
+        rules: [{ type: "max_operations", maxOperations: 3 }],
+        createdAt: new Date(),
+      };
+
+      await store1.savePolicy(policy);
+      const retrieved1 = await store1.getPolicy("w1");
+      expect(retrieved1).toEqual(policy);
+
+      // Verify file was written and is valid JSON
+      expect(fs.existsSync(filePath)).toBe(true);
+
+      // Create a second store instance pointing to same file
+      const store2 = new FilePolicyStore(filePath);
+      const retrieved2 = await store2.getPolicy("w1");
+      expect(retrieved2).toBeDefined();
+      expect(retrieved2?.id).toBe("p1");
+      expect(retrieved2?.walletId).toBe("w1");
+      expect(retrieved2?.rules).toEqual(policy.rules);
+      expect(retrieved2?.createdAt.getTime()).toBe(policy.createdAt.getTime());
+
+      // Test deletePolicy persists deletion
+      await store2.deletePolicy("w1");
+      expect(await store2.getPolicy("w1")).toBeNull();
+
+      // Third store instance confirms deletion was persisted
+      const store3 = new FilePolicyStore(filePath);
+      expect(await store3.getPolicy("w1")).toBeNull();
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("handles recordSpend and recordVelocity in-memory tracking", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "lumen-policy-test-"));
+    const filePath = path.join(tmpDir, "policies.json");
+
+    try {
+      const store = new FilePolicyStore(filePath);
+      const res = await store.recordSpend("w1", "2026-09-25", 25, "native");
+      expect(res).toEqual({ dailyTotal: 25, txCount: 1 });
+
+      const vel = await store.recordVelocity("w1", Date.now(), 60000);
+      expect(vel).toBe(1);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 });
