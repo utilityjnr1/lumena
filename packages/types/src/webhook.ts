@@ -1,6 +1,7 @@
 export type WebhookEventType =
   | "transaction.cosigned"
   | "transaction.sponsored"
+  | "transaction.fee_bump.submitted"
   | "policy.violated"
   | "balance.low"
   | "*";

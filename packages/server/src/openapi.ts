@@ -195,7 +195,7 @@ export const openApiSpec = {
       post: {
         summary: "Create or Update Wallet Policy",
         description:
-          "Configures spend limit, velocity, or allowlist policy rules for a specific wallet.",
+          "Configures spend limit, velocity, allowlist, or blocklist policy rules for a specific wallet.",
         requestBody: {
           required: true,
           content: {
@@ -215,6 +215,7 @@ export const openApiSpec = {
                         { $ref: "#/components/schemas/SpendLimitRule" },
                         { $ref: "#/components/schemas/VelocityRule" },
                         { $ref: "#/components/schemas/AllowlistRule" },
+                        { $ref: "#/components/schemas/BlocklistRule" },
                       ],
                     },
                   },
@@ -300,6 +301,18 @@ export const openApiSpec = {
             type: "array",
             items: { type: "string" },
             example: ["GCB2..."],
+          },
+        },
+        required: ["type", "destinations"],
+      },
+      BlocklistRule: {
+        type: "object",
+        properties: {
+          type: { type: "string", enum: ["blocklist"] },
+          destinations: {
+            type: "array",
+            items: { type: "string" },
+            example: ["GBAD..."],
           },
         },
         required: ["type", "destinations"],

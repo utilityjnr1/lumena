@@ -68,11 +68,25 @@ Triggers creation of a new test sponsored wallet on the server.
 npx @lumen/cli wallet create
 ```
 
-### 6. `lumen cosign inspect <xdr>`
+### 6. `lumen wallet balance <address>`
+Queries Horizon for all asset balances held by the specified address. Defaults to Stellar Testnet; use `--network` to select `mainnet` or `local`, or `--horizon-url` to provide a custom Horizon URL.
+
+```bash
+npx @lumen/cli wallet balance G... --network testnet
+```
+
+### 7. `lumen cosign inspect <xdr>`
 Decodes transaction XDR, displays operation details, and simulates policy checks.
 
 ```bash
 npx @lumen/cli cosign inspect "AAAAAgAAA..."
+```
+
+### 8. `lumen cosign submit <xdr> <walletAddress>`
+Submits a signed transaction XDR to the server's `/cosign` endpoint for policy validation and co-signing.
+
+```bash
+npx @lumen/cli cosign submit "AAAAAgAAA..." G...
 ```
 
 ---
@@ -142,4 +156,3 @@ pnpm --filter @lumen/cli clean
 ## License
 
 MIT
-

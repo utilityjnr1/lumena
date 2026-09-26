@@ -32,6 +32,13 @@ const AllowlistRuleSchema = z.object({
     .min(1, "At least one destination is required"),
 });
 
+const BlocklistRuleSchema = z.object({
+  type: z.literal("blocklist"),
+  destinations: z
+    .array(z.string().startsWith("G", "destination must be a valid Stellar public key"))
+    .min(1, "At least one destination is required"),
+});
+
 const MaxOperationsRuleSchema = z.object({
   type: z.literal("max_operations"),
   maxOperations: z.number().int().positive("maxOperations must be a positive integer"),
@@ -41,6 +48,7 @@ const PolicyRuleSchema = z.discriminatedUnion("type", [
   SpendLimitSchema,
   VelocityRuleSchema,
   AllowlistRuleSchema,
+  BlocklistRuleSchema,
   MaxOperationsRuleSchema,
 ]);
 
