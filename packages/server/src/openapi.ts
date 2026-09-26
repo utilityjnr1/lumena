@@ -308,18 +308,71 @@ export const openApiSpec = {
           },
         },
         responses: {
-          "200": {
-            description: "Policy created or updated successfully",
+          "201": {
+            description: "Policy created successfully",
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/Policy" },
               },
             },
           },
+          "409": { description: "A policy already exists for this wallet" },
         },
       },
     },
     "/policy/{walletId}": {
+      put: {
+        summary: "Update Wallet Policy",
+        description: "Replaces the rules of an existing wallet policy.",
+        parameters: [
+          {
+            name: "walletId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+            description: "Stellar public key address of the wallet.",
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  walletId: {
+                    type: "string",
+                    description: "Must match the walletId in the URL.",
+                    example: "GAD7654...",
+                  },
+                  rules: {
+                    type: "array",
+                    items: {
+                      oneOf: [
+                        { $ref: "#/components/schemas/SpendLimitRule" },
+                        { $ref: "#/components/schemas/VelocityRule" },
+                        { $ref: "#/components/schemas/AllowlistRule" },
+                      ],
+                    },
+                  },
+                },
+                required: ["walletId", "rules"],
+              },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "Policy updated successfully",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Policy" },
+              },
+            },
+          },
+          "404": { description: "No policy found for wallet" },
+        },
+      },
       get: {
         summary: "Get Wallet Policy",
         description: "Retrieves active policy rules for a given wallet address.",
@@ -341,6 +394,23 @@ export const openApiSpec = {
               },
             },
           },
+          "404": { description: "No policy found for wallet" },
+        },
+      },
+      delete: {
+        summary: "Delete Wallet Policy",
+        description: "Deletes the wallet policy and clears its in-memory tracking data.",
+        parameters: [
+          {
+            name: "walletId",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+            description: "Stellar public key address of the wallet.",
+          },
+        ],
+        responses: {
+          "204": { description: "Policy deleted successfully" },
           "404": { description: "No policy found for wallet" },
         },
       },

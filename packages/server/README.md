@@ -94,7 +94,8 @@ pnpm --filter @lumen/server clean
 | `POST` | `/cosign` | Validates transaction against policy and appends co-signer signature |
 | `POST` | `/fee-bump` | Wraps transaction in a fee-bump envelope signed by fee-payer |
 | `GET` | `/policy/:walletId` | Retrieves the active policy spec for a wallet |
-| `POST` | `/policy` | Sets or updates policy rules for a wallet |
+| `POST` | `/policy` | Creates a policy for a wallet |
+| `PUT` | `/policy/:walletId` | Replaces rules on an existing wallet policy |
 | `DELETE` | `/policy/:walletId` | Deletes the policy specification for a wallet |
 | `GET` | `/webhooks/deliveries` | Reads persistent webhook delivery history |
 | `GET` | `/status` | Server health check and fee-sponsor balance |
@@ -114,6 +115,22 @@ including successful and failed attempts; records do not include webhook secrets
 ## Webhook Events
 
 Register `transaction.fee_bump.submitted` to receive a webhook after a fee-bump transaction is successfully submitted to Stellar. The payload data includes the fee source and submitted transaction hash. This event is dispatched alongside the existing `transaction.sponsored` event.
+
+---
+
+## Webhook Signature Verification
+
+Webhook deliveries include an `X-Lumen-Signature` header containing an HMAC-SHA256
+signature. Consumers can verify it using the same shared secret configured for the webhook
+and the exact, unmodified request body:
+
+```typescript
+import { verifyWebhookSignature } from "@lumen/server";
+
+const valid = verifyWebhookSignature(rawRequestBody, signatureHeader, webhookSecret);
+```
+
+The helper returns `false` for malformed signatures or when the signature does not match.
 
 ---
 

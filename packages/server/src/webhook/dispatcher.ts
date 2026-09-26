@@ -10,6 +10,24 @@ import type {
 } from "@lumen/types";
 import { logger } from "../logger.js";
 
+export function verifyWebhookSignature(
+  payload: string,
+  signature: string,
+  secret: string,
+): boolean {
+  const digest = signature.startsWith("sha256=") ? signature.slice("sha256=".length) : "";
+  if (!/^[a-f0-9]{64}$/.test(digest)) {
+    return false;
+  }
+
+  const receivedDigest = Buffer.from(digest, "hex");
+  const expectedDigest = createHmac("sha256", secret).update(payload).digest();
+  return (
+    receivedDigest.length === expectedDigest.length &&
+    timingSafeEqual(receivedDigest, expectedDigest)
+  );
+}
+
 export interface WebhookDispatcherOpts {
   webhooks?: WebhookConfig[];
   timeoutMs?: number;

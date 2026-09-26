@@ -50,6 +50,18 @@ describe("WebhookDispatcher Unit Tests", () => {
     expect(sig).toBe(expected);
   });
 
+  it("verifies webhook signatures and rejects mismatched or malformed signatures", () => {
+    const dispatcher = new WebhookDispatcher();
+    const payload = JSON.stringify({ event: "transaction.cosigned" });
+    const signature = dispatcher.generateSignature(payload, secret);
+
+    expect(verifyWebhookSignature(payload, signature, secret)).toBe(true);
+    expect(verifyWebhookSignature(`${payload} `, signature, secret)).toBe(false);
+    expect(verifyWebhookSignature(payload, signature, "wrong-secret")).toBe(false);
+    expect(verifyWebhookSignature(payload, "not-a-signature", secret)).toBe(false);
+    expect(verifyWebhookSignature(payload, `sha256=${"a".repeat(63)}`, secret)).toBe(false);
+  });
+
   it("filters events by webhook subscriptions and supports wildcards", async () => {
     const dispatcher = createDispatcher({ timeoutMs: 1000, maxRetries: 0 });
 

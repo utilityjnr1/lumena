@@ -131,6 +131,13 @@ export class PolicyEngine {
       return { approved: true };
     }
 
+    if (txAmount > parseFloat(rule.maxPerTx)) {
+      return {
+        approved: false,
+        reason: `Transaction spending ${txAmount} exceeds per-tx limit ${rule.maxPerTx}`,
+      };
+    }
+
     if (!this.spendTracking.has(walletAddress)) {
       this.spendTracking.set(walletAddress, new Map());
     }
