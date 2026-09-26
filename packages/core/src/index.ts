@@ -2,6 +2,7 @@ export { StellarClient } from "./stellar/client.js";
 export { createSponsoredAccount } from "./stellar/account.js";
 export { setupMultisig, setupSessionKey, type SetupMultisigOpts, type SetupSessionKeyOpts } from "./stellar/multisig.js";
 export { buildFeeBump } from "./stellar/transaction.js";
+export { pathPayment, pathPaymentStrictReceive, findPaths } from "./stellar/path-payment.js";
 export { KNOWN_ASSETS, getAsset, getNativeAsset } from "./stellar/assets.js";
 export {
   changeTrust,
