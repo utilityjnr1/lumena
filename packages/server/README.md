@@ -111,6 +111,16 @@ Register `transaction.fee_bump.submitted` to receive a webhook after a fee-bump 
 
 ## Authentication & Security
 
+### CORS
+Cross-origin access is disabled by default. Configure the `cors` option in `ServerOpts` to allow only the origins your application uses:
+
+```typescript
+const { app } = createServer({
+  // ...
+  cors: { origin: ["https://app.example.com"] },
+});
+```
+
 ### API Key Protection
 To protect server endpoints in non-localhost deployments, configure the `apiKey` option in `ServerOpts` (or set `API_KEY` in your environment):
 

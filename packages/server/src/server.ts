@@ -69,7 +69,7 @@ export interface ServerOpts {
   webhookDispatcher?: WebhookDispatcher;
   /**
    * Optional CORS configuration passed to the `cors` npm package.
-   * Defaults to allowing all origins if omitted.
+   * Cross-origin access is disabled by default.
    */
   cors?: CorsOptions;
   /**
@@ -139,11 +139,7 @@ export function createServer(opts: ServerOpts): ServerResult {
   });
   app.use(express.json());
 
-  const corsOptions: CorsOptions = opts.cors ?? {
-    origin: "*",
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "x-request-id"],
-  };
+  const corsOptions: CorsOptions = opts.cors ?? { origin: false };
   app.use(cors(corsOptions));
 
   app.use((req: Request, res: Response, next: NextFunction) => {
