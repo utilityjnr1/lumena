@@ -11,7 +11,8 @@
     "start": "node dist/main.js",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@aws-sdk/client-kms": "^3.1133.0",
@@ -32,6 +33,7 @@
     "@types/express": "^5.0.0",
     "@types/pino-http": "^5.8.3",
     "@types/swagger-ui-express": "^4.1.8",
+    "@vitest/coverage-v8": "^5.0.0",
     "typescript": "^5.8.0",
     "vitest": "^5.0.0"
   }
