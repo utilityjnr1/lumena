@@ -1,6 +1,7 @@
 # Lumen
 
 [![CI](https://github.com/utilityjnr1/lumena/actions/workflows/ci.yml/badge.svg)](https://github.com/utilityjnr1/lumena/actions/workflows/ci.yml)
+[![Security](https://github.com/utilityjnr1/lumena/actions/workflows/security.yml/badge.svg)](https://github.com/utilityjnr1/lumena/actions/workflows/security.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Network](https://img.shields.io/badge/network-Stellar-orange.svg)](https://stellar.org)
 [![Runtime](https://img.shields.io/badge/runtime-TypeScript%20%2B%20Node-blue.svg)](https://nodejs.org)
@@ -21,7 +22,9 @@ Lumen is a wallet SDK for building non-custodial Stellar wallets where the user 
 6. [Packages](#packages)
 7. [Environment](#environment)
 8. [SEP-10 Authentication](#sep-10-authentication)
-9. [License](#license)
+9. [Guides](#guides)
+10. [Security](#security)
+11. [License](#license)
 
 ---
 
@@ -183,6 +186,28 @@ We welcome open-source contributions! Check out our [Open Issues Directory](ISSU
 - 📦 **SDKs & DX**: React hooks package (`@lumen/react`), CLI (`@lumen/cli`), and playground app.
 
 See [ISSUES.md](ISSUES.md) for full details on how to fork the repo and submit pull requests.
+
+---
+
+## Guides
+
+Step-by-step guides for common integration patterns:
+
+| Guide | Description |
+| --- | --- |
+| [Gasless Transactions](docs/guides/gasless-transactions.md) | End-to-end walkthrough of Stellar Fee-Bump (CAP-0015) and how Lumen abstracts gas fees — with code examples for `@lumen/web-sdk`, `@lumen/react`, and the raw REST API. |
+
+---
+
+## Security
+
+Automated security analysis runs on every push and pull request via GitHub Actions:
+
+- **CodeQL** static analysis for JavaScript/TypeScript (security-extended query suite).
+- **`pnpm audit`** dependency vulnerability scanning (fails on high/critical severity).
+- **Weekly scheduled scan** to catch newly-published advisories.
+
+See [docs/SECURITY.md](docs/SECURITY.md) for the full security policy, vulnerability reporting instructions, and security best practices for production deployments.
 
 ---
 
