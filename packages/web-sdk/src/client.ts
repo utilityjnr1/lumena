@@ -195,6 +195,41 @@ export class LumenClient {
     if (!wallet) throw new Error(`Wallet not found: ${id}`);
     return wallet.invokeContract(contractId, method, args, fee);
   }
+
+  /**
+   * Establish or modify a trustline for the given wallet.
+   * Pass `limit = '0'` to remove the trustline.
+   *
+   * @param id        - wallet id (account address)
+   * @param assetCode - the asset code, e.g. 'USDC'
+   * @param issuer    - the issuer's Stellar public key
+   * @param limit     - maximum balance limit (omit for default; '0' to remove)
+   */
+  async changeTrust(
+    id: string,
+    assetCode: string,
+    issuer: string,
+    limit?: string,
+  ): Promise<{ hash: string }> {
+    const wallet = this.wallets.get(id);
+    if (!wallet) throw new Error(`Wallet not found: ${id}`);
+    const asset = new Asset(assetCode, issuer);
+    return wallet.changeTrust(asset, limit);
+  }
+
+  /**
+   * Generic HTTP GET against the configured serverUrl.
+   * Used by hooks that need to query server-side endpoints directly.
+   */
+  async get<T>(path: string): Promise<T> {
+    if (!this.serverUrl) throw new Error("serverUrl is required for HTTP calls");
+    const res = await fetch(`${this.serverUrl}${path}`);
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`GET ${path} failed (${res.status}): ${body}`);
+    }
+    return res.json() as Promise<T>;
+  }
 }
 
 export async function createWalletWithPasskey(

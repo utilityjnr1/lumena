@@ -32,3 +32,9 @@ export type {
   InvokeContractResult,
   UseInvokeContractResult,
 } from "./use-invoke-contract.js";
+
+export { useTrustline } from "./use-trustline.js";
+export type { UseTrustlineResult } from "./use-trustline.js";
+
+export { useTransactionHistory } from "./use-transaction-history.js";
+export type { Transaction, UseTransactionHistoryResult } from "./use-transaction-history.js";

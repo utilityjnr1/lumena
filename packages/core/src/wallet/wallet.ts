@@ -252,6 +252,27 @@ export class Wallet {
     }
   }
 
+  /**
+   * Establish or modify a trustline for this wallet account.
+   * Pass `limit = '0'` to remove the trustline.
+   */
+  async changeTrust(asset: Asset, limit?: string): Promise<{ hash: string }> {
+    if (!this._keypair) throw new Error("Wallet not initialized");
+
+    const account = await this.client.horizon.loadAccount(this.address);
+    const builder = new TransactionBuilder(account, {
+      fee: BASE_FEE,
+      networkPassphrase: this.client.networkPassphrase,
+    });
+
+    builder.addOperation(Operation.changeTrust({ asset, limit }));
+    const tx = builder.setTimeout(180).build();
+    tx.sign(this._keypair);
+
+    const result = await this.client.horizon.submitTransaction(tx as any);
+    return { hash: result.hash };
+  }
+
   async simulateContract(
     contractId: string,
     method: string,
