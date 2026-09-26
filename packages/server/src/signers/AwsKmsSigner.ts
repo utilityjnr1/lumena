@@ -51,6 +51,11 @@ import { KMSClient, GetPublicKeyCommand, SignCommand } from "@aws-sdk/client-kms
 import type { Signer } from "@lumen/types";
 import { StrKey } from "@stellar/stellar-sdk";
 
+function extractEd25519PublicKey(bytes: Uint8Array): Buffer {
+  const buffer = Buffer.from(bytes);
+  return buffer.length === 32 ? buffer : buffer.slice(-32);
+}
+
 export class AwsKmsSigner implements Signer {
   private readonly keyId: string;
   private readonly region: string;
@@ -92,7 +97,7 @@ export class AwsKmsSigner implements Signer {
     const derPublicKey = await client.send(
       new GetPublicKeyCommand({ KeyId: this.keyId })
     );
-    const rawPubkeyBytes = derPublicKey.PublicKey as Buffer;
+    const rawPubkeyBytes = extractEd25519PublicKey(derPublicKey.PublicKey as Uint8Array);
     this.cachedPublicKey = StrKey.encodeEd25519PublicKey(rawPubkeyBytes);
   }
 

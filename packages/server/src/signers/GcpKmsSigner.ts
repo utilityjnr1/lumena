@@ -8,6 +8,10 @@
 import type { Signer, GcpKmsSignerConfig } from "@lumen/types";
 import { StrKey } from "@stellar/stellar-sdk";
 
+function extractEd25519PublicKey(bytes: Buffer): Buffer {
+  return bytes.length === 32 ? bytes : bytes.slice(-32);
+}
+
 export class GcpKmsSigner implements Signer {
   private readonly config: GcpKmsSignerConfig;
   private readonly resourceName: string;
@@ -89,7 +93,7 @@ export class GcpKmsSigner implements Signer {
 
     const data = (await res.json()) as { pem?: string; rawPublicKey?: string };
     if (data.rawPublicKey) {
-      const rawBytes = Buffer.from(data.rawPublicKey, "base64");
+      const rawBytes = extractEd25519PublicKey(Buffer.from(data.rawPublicKey, "base64"));
       this.cachedPublicKey = StrKey.encodeEd25519PublicKey(rawBytes);
       return this.cachedPublicKey;
     }
@@ -102,7 +106,7 @@ export class GcpKmsSigner implements Signer {
         .replace(/\s+/g, "");
       const derBuffer = Buffer.from(pemClean, "base64");
       // Ed25519 SPKI DER typically has 32-byte public key as the trailing 32 bytes
-      const rawBytes = derBuffer.slice(-32);
+      const rawBytes = extractEd25519PublicKey(derBuffer);
       this.cachedPublicKey = StrKey.encodeEd25519PublicKey(rawBytes);
       return this.cachedPublicKey;
     }

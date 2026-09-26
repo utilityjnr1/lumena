@@ -112,7 +112,13 @@ export class PolicyEngine {
       const typedOp = op as
         Operation.Payment | Operation.PathPaymentStrictSend | Operation.PathPaymentStrictReceive;
       const opAsset: Asset | undefined =
-        "asset" in typedOp ? (typedOp as Operation.Payment).asset : undefined;
+        "asset" in typedOp
+          ? (typedOp as Operation.Payment).asset
+          : "sendAsset" in typedOp
+            ? (typedOp as Operation.PathPaymentStrictSend).sendAsset
+            : "destAsset" in typedOp
+              ? (typedOp as Operation.PathPaymentStrictReceive).destAsset
+              : undefined;
       const opAssetId = this.getAssetIdentifier(opAsset);
 
       if (opAssetId === targetAsset) {
