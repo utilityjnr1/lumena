@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { KeyManager, type KeyStorage } from "../keys/manager.js";
 import { Keypair } from "@stellar/stellar-sdk";
 
@@ -19,6 +19,10 @@ describe("KeyManager", () => {
 
   beforeEach(() => {
     keyManager = new KeyManager();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   describe("generateKeypair", () => {
@@ -46,7 +50,19 @@ describe("KeyManager", () => {
       expect(loaded.publicKey()).toBe(kp.publicKey());
     });
 
-    it("rejects load with wrong passphrase", async () => {
+    it("store and load round-trip with correct passphrase returns the original keypair", async () => {
+      const originalKeypair = keyManager.generateKeypair();
+      const originalPublicKey = originalKeypair.publicKey();
+      const originalSecret = originalKeypair.secret();
+
+      const stored = await keyManager.store(originalKeypair, "correct-passphrase");
+      const loadedKeypair = await keyManager.load(stored.publicKey, "correct-passphrase");
+
+      expect(loadedKeypair.publicKey()).toBe(originalPublicKey);
+      expect(loadedKeypair.secret()).toBe(originalSecret);
+    });
+
+    it("load with wrong passphrase throws a decryption error", async () => {
       const kp = keyManager.generateKeypair();
       const stored = await keyManager.store(kp, "correct-passphrase");
 
@@ -62,38 +78,64 @@ describe("KeyManager", () => {
       const loaded = await keyManager.load(stored.publicKey, "test-passphrase");
       expect(loaded.publicKey()).toBe(kp.publicKey());
     });
+
+    it("throws Key not found error for unknown public key", async () => {
+      const unknownPublicKey = Keypair.random().publicKey();
+      await expect(keyManager.load(unknownPublicKey, "test-passphrase")).rejects.toThrow(
+        `Key not found: ${unknownPublicKey}`,
+      );
+    });
+  });
+
+  describe("list", () => {
+    it("returns all stored keys", async () => {
+      const storage = createStorage();
+      const manager = new KeyManager(storage);
+
+      const kp1 = manager.generateKeypair();
+      const kp2 = manager.generateKeypair();
+      const kp3 = manager.generateKeypair();
+
+      await manager.store(kp1, "pass1");
+      await manager.store(kp2, "pass2");
+      await manager.store(kp3, "pass3");
+
+      const listedKeys = manager.list();
+      expect(listedKeys).toHaveLength(3);
+      expect(listedKeys.map((k) => k.publicKey)).toContain(kp1.publicKey());
+      expect(listedKeys.map((k) => k.publicKey)).toContain(kp2.publicKey());
+      expect(listedKeys.map((k) => k.publicKey)).toContain(kp3.publicKey());
+    });
+
+    it("returns empty array when no keys are stored", () => {
+      const storage = createStorage();
+      const manager = new KeyManager(storage);
+      expect(manager.list()).toHaveLength(0);
+    });
   });
 
   it("restores encrypted keys from browser storage in a new manager", async () => {
     const storage = createStorage();
     vi.stubGlobal("localStorage", storage);
-    try {
-      const firstManager = new KeyManager();
-      const keypair = firstManager.generateKeypair();
-      const stored = await firstManager.store(keypair, "test-passphrase");
+    const firstManager = new KeyManager();
+    const keypair = firstManager.generateKeypair();
+    const stored = await firstManager.store(keypair, "test-passphrase");
 
-      const persistedValue = storage.getItem(`lumen:key-manager:${stored.publicKey}`);
-      expect(persistedValue).not.toContain(keypair.secret());
+    const persistedValue = storage.getItem(`lumen:key-manager:${stored.publicKey}`);
+    expect(persistedValue).not.toContain(keypair.secret());
 
-      const restoredManager = new KeyManager();
-      const restoredKeys = restoredManager.list();
-      expect(restoredKeys).toHaveLength(1);
-      expect(restoredKeys[0].createdAt).toEqual(stored.createdAt);
+    const restoredManager = new KeyManager();
+    const restoredKeys = restoredManager.list();
+    expect(restoredKeys).toHaveLength(1);
+    expect(restoredKeys[0].createdAt).toEqual(stored.createdAt);
 
-      const restoredKeypair = await restoredManager.load(stored.publicKey, "test-passphrase");
-      expect(restoredKeypair.publicKey()).toBe(keypair.publicKey());
-    } finally {
-      vi.unstubAllGlobals();
-    }
+    const restoredKeypair = await restoredManager.load(stored.publicKey, "test-passphrase");
+    expect(restoredKeypair.publicKey()).toBe(keypair.publicKey());
   });
 
   describe("generateFromOAuth", () => {
     it("derives a keypair from OAuth token", async () => {
-      const kp = await keyManager.deriveFromOAuth(
-        "google",
-        "test-oauth-token",
-        "salt-value"
-      );
+      const kp = await keyManager.deriveFromOAuth("google", "test-oauth-token", "salt-value");
       expect(kp).toBeInstanceOf(Keypair);
       expect(typeof kp.publicKey()).toBe("string");
     });
