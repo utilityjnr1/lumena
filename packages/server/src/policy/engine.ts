@@ -5,9 +5,10 @@ import type {
   SpendLimit,
   VelocityRule,
   AllowlistRule,
+  BlocklistRule,
   SessionKeyPolicyRule,
   TimeBoundsRule,
-  RequireMemoRule,
+  MaxOperationsRule,
 } from "@lumen/types";
 import { validateTimeBounds } from "@lumen/core";
 
@@ -21,8 +22,13 @@ export interface EvaluateResult {
   reason?: string;
 }
 
+export interface PolicyEngineOptions {
+  defaultPolicy?: "allow" | "deny";
+}
+
 export class PolicyEngine {
   private policies: Map<string, Policy> = new Map();
+  private readonly defaultPolicy: "allow" | "deny";
 
   // In-memory tracking for spend limit and velocity
   private readonly spendTracking: Map<
@@ -31,6 +37,10 @@ export class PolicyEngine {
   > = new Map();
   private readonly velocityTracking: Map<string, number[]> = new Map();
   private readonly sessionSpendTracking: Map<string, number> = new Map();
+
+  constructor(options: PolicyEngineOptions = {}) {
+    this.defaultPolicy = options.defaultPolicy ?? "allow";
+  }
 
   addPolicy(policy: Policy): void {
     this.policies.set(policy.walletId, policy);
@@ -50,7 +60,9 @@ export class PolicyEngine {
     const policy = this.policies.get(opts.walletAddress);
 
     if (!policy) {
-      return { approved: true };
+      return this.defaultPolicy === "allow"
+        ? { approved: true }
+        : { approved: false, reason: `No policy found for wallet ${opts.walletAddress}` };
     }
 
     for (const rule of policy.rules) {
@@ -71,12 +83,14 @@ export class PolicyEngine {
         return this.evaluateVelocity(rule as VelocityRule, opts);
       case "allowlist":
         return this.evaluateAllowlist(rule as AllowlistRule, opts);
+      case "blocklist":
+        return this.evaluateBlocklist(rule as BlocklistRule, opts);
       case "session_key":
         return this.evaluateSessionKey(rule as SessionKeyPolicyRule, opts);
       case "timebounds":
         return this.evaluateTimeBounds(rule as TimeBoundsRule, opts);
-      case "require_memo":
-        return this.evaluateRequireMemo(rule as RequireMemoRule, opts);
+      case "max_operations":
+        return this.evaluateMaxOperations(rule as MaxOperationsRule, opts);
       default:
         return { approved: true };
     }
@@ -122,6 +136,13 @@ export class PolicyEngine {
       walletTrack.set(trackKey, { dailyTotal: 0, txCount: 0 });
     }
     const track = walletTrack.get(trackKey)!;
+
+    if (txAmount > parseFloat(rule.maxPerTx)) {
+      return {
+        approved: false,
+        reason: `Transaction spending ${txAmount} exceeds per-tx limit ${rule.maxPerTx}`,
+      };
+    }
 
     if (track.dailyTotal + txAmount > parseFloat(rule.maxDaily)) {
       return {
@@ -203,6 +224,22 @@ export class PolicyEngine {
     return { approved: true };
   }
 
+  private evaluateBlocklist(rule: BlocklistRule, opts: EvaluateOpts): EvaluateResult {
+    for (const op of opts.transaction.operations) {
+      if ("destination" in op && op.destination) {
+        const destination = op.destination.toString();
+        if (rule.destinations.includes(destination)) {
+          return {
+            approved: false,
+            reason: `Destination ${destination} is on the blocklist`,
+          };
+        }
+      }
+    }
+
+    return { approved: true };
+  }
+
   private evaluateSessionKey(rule: SessionKeyPolicyRule, opts: EvaluateOpts): EvaluateResult {
     const now = Date.now();
     const expiryMs = rule.expiresAt < 1e11 ? rule.expiresAt * 1000 : rule.expiresAt;
@@ -243,16 +280,22 @@ export class PolicyEngine {
     return { approved: true };
   }
 
-  private evaluateRequireMemo(rule: RequireMemoRule, opts: EvaluateOpts): EvaluateResult {
-    if (!opts.transaction.memo || opts.transaction.memo.type === "none") {
-      const requiresMemo = opts.transaction.operations.some((op) => {
-        if (!("destination" in op) || !op.destination) return false;
-        return !rule.destinations || rule.destinations.includes(op.destination.toString());
-      });
-      if (requiresMemo) {
-        return { approved: false, reason: "Transaction memo is required for this destination" };
-      }
+  evaluateMaxOperations(
+    rule: MaxOperationsRule,
+    optsOrTx: EvaluateOpts | Transaction | { operations: unknown[] },
+  ): EvaluateResult {
+    const tx =
+      "transaction" in optsOrTx
+        ? (optsOrTx as EvaluateOpts).transaction
+        : (optsOrTx as { operations: unknown[] });
+    const opCount = tx?.operations?.length ?? 0;
+    if (opCount > rule.maxOperations) {
+      return {
+        approved: false,
+        reason: `Transaction operation count ${opCount} exceeds limit of ${rule.maxOperations}`,
+      };
     }
+
     return { approved: true };
   }
 }

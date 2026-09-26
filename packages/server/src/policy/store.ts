@@ -1,11 +1,11 @@
+import fs from "node:fs";
+import path from "node:path";
 import type { Policy, PolicyStore } from "@lumen/types";
 
 export class InMemoryPolicyStore implements PolicyStore {
   private policies: Map<string, Policy> = new Map();
-  private spendTracking: Map<
-    string,
-    Map<string, { dailyTotal: number; txCount: number }>
-  > = new Map();
+  private spendTracking: Map<string, Map<string, { dailyTotal: number; txCount: number }>> =
+    new Map();
   private velocityTracking: Map<string, number[]> = new Map();
 
   async getPolicy(walletId: string): Promise<Policy | null> {
@@ -26,7 +26,7 @@ export class InMemoryPolicyStore implements PolicyStore {
     walletId: string,
     date: string,
     amount: number,
-    asset: string = "native"
+    asset: string = "native",
   ): Promise<{ dailyTotal: number; txCount: number }> {
     if (!this.spendTracking.has(walletId)) {
       this.spendTracking.set(walletId, new Map());
@@ -44,11 +44,115 @@ export class InMemoryPolicyStore implements PolicyStore {
     return { dailyTotal: track.dailyTotal, txCount: track.txCount };
   }
 
-  async recordVelocity(
+  async recordVelocity(walletId: string, timestamp: number, windowMs: number): Promise<number> {
+    if (!this.velocityTracking.has(walletId)) {
+      this.velocityTracking.set(walletId, []);
+    }
+    const txTimes = this.velocityTracking.get(walletId)!;
+    const cutoff = timestamp - windowMs;
+    const recentTxs = txTimes.filter((t) => t > cutoff);
+    recentTxs.push(timestamp);
+    this.velocityTracking.set(walletId, recentTxs);
+
+    return recentTxs.length;
+  }
+}
+
+export class FilePolicyStore implements PolicyStore {
+  private readonly filePath: string;
+  private policies: Map<string, Policy> = new Map();
+  private spendTracking: Map<string, Map<string, { dailyTotal: number; txCount: number }>> =
+    new Map();
+  private velocityTracking: Map<string, number[]> = new Map();
+
+  constructor(filePath: string) {
+    this.filePath = filePath;
+    this.loadFromFile();
+  }
+
+  private loadFromFile(): void {
+    try {
+      if (fs.existsSync(this.filePath)) {
+        const raw = fs.readFileSync(this.filePath, "utf-8");
+        if (raw.trim()) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            for (const item of parsed) {
+              if (item && item.walletId) {
+                if (item.createdAt && typeof item.createdAt === "string") {
+                  item.createdAt = new Date(item.createdAt);
+                }
+                this.policies.set(item.walletId, item);
+              }
+            }
+          } else if (typeof parsed === "object" && parsed !== null) {
+            for (const item of Object.values(parsed)) {
+              const p = item as Policy;
+              if (p && p.walletId) {
+                if (p.createdAt && typeof p.createdAt === "string") {
+                  p.createdAt = new Date(p.createdAt);
+                }
+                this.policies.set(p.walletId, p);
+              }
+            }
+          }
+        }
+      }
+    } catch {
+      // In case of read/parse failure, initialize with empty state
+    }
+  }
+
+  private async persist(): Promise<void> {
+    const dir = path.dirname(this.filePath);
+    await fs.promises.mkdir(dir, { recursive: true });
+
+    const tempPath = `${this.filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2)}`;
+    const data = JSON.stringify(Array.from(this.policies.values()), null, 2);
+
+    await fs.promises.writeFile(tempPath, data, "utf-8");
+    await fs.promises.rename(tempPath, this.filePath);
+  }
+
+  async getPolicy(walletId: string): Promise<Policy | null> {
+    return this.policies.get(walletId) ?? null;
+  }
+
+  async savePolicy(policy: Policy): Promise<void> {
+    this.policies.set(policy.walletId, policy);
+    await this.persist();
+  }
+
+  async deletePolicy(walletId: string): Promise<void> {
+    this.policies.delete(walletId);
+    this.spendTracking.delete(walletId);
+    this.velocityTracking.delete(walletId);
+    await this.persist();
+  }
+
+  async recordSpend(
     walletId: string,
-    timestamp: number,
-    windowMs: number
-  ): Promise<number> {
+    date: string,
+    amount: number,
+    asset: string = "native",
+  ): Promise<{ dailyTotal: number; txCount: number }> {
+    if (!this.spendTracking.has(walletId)) {
+      this.spendTracking.set(walletId, new Map());
+    }
+    const walletTrack = this.spendTracking.get(walletId)!;
+    const trackKey = `${date}:${asset}`;
+
+    if (!walletTrack.has(trackKey)) {
+      walletTrack.set(trackKey, { dailyTotal: 0, txCount: 0 });
+    }
+    const track = walletTrack.get(trackKey)!;
+    track.dailyTotal += amount;
+    track.txCount += 1;
+
+    return { dailyTotal: track.dailyTotal, txCount: track.txCount };
+  }
+
+  async recordVelocity(walletId: string, timestamp: number, windowMs: number): Promise<number> {
     if (!this.velocityTracking.has(walletId)) {
       this.velocityTracking.set(walletId, []);
     }
@@ -111,7 +215,7 @@ export class RedisPolicyStore implements PolicyStore {
     walletId: string,
     date: string,
     amount: number,
-    asset: string = "native"
+    asset: string = "native",
   ): Promise<{ dailyTotal: number; txCount: number }> {
     const totalKey = `${this.keyPrefix}spend:${walletId}:${asset}:${date}:total`;
     const countKey = `${this.keyPrefix}spend:${walletId}:${asset}:${date}:count`;
@@ -130,11 +234,7 @@ export class RedisPolicyStore implements PolicyStore {
     };
   }
 
-  async recordVelocity(
-    walletId: string,
-    timestamp: number,
-    windowMs: number
-  ): Promise<number> {
+  async recordVelocity(walletId: string, timestamp: number, windowMs: number): Promise<number> {
     const key = `${this.keyPrefix}velocity:${walletId}`;
     const cutoff = timestamp - windowMs;
     const member = `${timestamp}-${Math.random().toString(36).substring(2, 9)}`;

@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  CosignRequestSchema,
-  FeeBumpRequestSchema,
-  PolicyRequestSchema,
-} from "../validation.js";
+import { CosignRequestSchema, FeeBumpRequestSchema, PolicyRequestSchema } from "../validation.js";
 
 describe("validation schemas", () => {
   it("validates valid cosign requests", () => {
@@ -30,7 +26,7 @@ describe("validation schemas", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.flatten().fieldErrors.walletAddress).toContain(
-        "walletAddress must be a valid Stellar public key"
+        "walletAddress must be a valid Stellar public key",
       );
     }
   });
@@ -44,7 +40,7 @@ describe("validation schemas", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.flatten().fieldErrors.walletAddress).toContain(
-        "walletAddress must be a valid Stellar public key"
+        "walletAddress must be a valid Stellar public key",
       );
     }
   });
@@ -68,6 +64,19 @@ describe("validation schemas", () => {
       ],
     };
     const result = PolicyRequestSchema.safeParse(valid);
+    expect(result.success).toBe(true);
+  });
+
+  it("validates blocklist policy rules", () => {
+    const result = PolicyRequestSchema.safeParse({
+      walletId: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+      rules: [
+        {
+          type: "blocklist",
+          destinations: ["GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"],
+        },
+      ],
+    });
     expect(result.success).toBe(true);
   });
 });

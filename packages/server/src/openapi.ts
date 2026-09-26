@@ -2,7 +2,8 @@ export const openApiSpec = {
   openapi: "3.0.3",
   info: {
     title: "Lumen Server API",
-    description: "API specification and documentation portal for @lumen/server co-signing, fee sponsorship, and policy engine services.",
+    description:
+      "API specification and documentation portal for @lumen/server co-signing, fee sponsorship, and policy engine services.",
     version: "0.1.0",
   },
   servers: [
@@ -15,7 +16,8 @@ export const openApiSpec = {
     "/health": {
       get: {
         summary: "Health Check",
-        description: "Returns the operational status of the server and the configured Stellar network.",
+        description:
+          "Returns the operational status of the server and the configured Stellar network.",
         responses: {
           "200": {
             description: "Server is healthy",
@@ -38,7 +40,8 @@ export const openApiSpec = {
     "/cosign": {
       post: {
         summary: "Cosign Transaction",
-        description: "Validates transaction operations against active policy rules and appends co-signer signature if approved.",
+        description:
+          "Validates transaction operations against active policy rules and appends co-signer signature if approved.",
         requestBody: {
           required: true,
           content: {
@@ -46,8 +49,16 @@ export const openApiSpec = {
               schema: {
                 type: "object",
                 properties: {
-                  xdr: { type: "string", description: "Base64 encoded Stellar transaction envelope XDR.", example: "AAAAAG..." },
-                  walletAddress: { type: "string", description: "Stellar public key address of the originating wallet.", example: "GAD7654..." },
+                  xdr: {
+                    type: "string",
+                    description: "Base64 encoded Stellar transaction envelope XDR.",
+                    example: "AAAAAG...",
+                  },
+                  walletAddress: {
+                    type: "string",
+                    description: "Stellar public key address of the originating wallet.",
+                    example: "GAD7654...",
+                  },
                 },
                 required: ["xdr", "walletAddress"],
               },
@@ -77,7 +88,8 @@ export const openApiSpec = {
     "/fee-bump": {
       post: {
         summary: "Wrap Fee-Bump Transaction",
-        description: "Wraps a transaction envelope in a FeeBumpTransaction signed by the fee sponsor account.",
+        description:
+          "Wraps a transaction envelope in a FeeBumpTransaction signed by the fee sponsor account.",
         requestBody: {
           required: true,
           content: {
@@ -85,7 +97,11 @@ export const openApiSpec = {
               schema: {
                 type: "object",
                 properties: {
-                  xdr: { type: "string", description: "Base64 encoded Stellar transaction envelope XDR to wrap.", example: "AAAAAG..." },
+                  xdr: {
+                    type: "string",
+                    description: "Base64 encoded Stellar transaction envelope XDR to wrap.",
+                    example: "AAAAAG...",
+                  },
                 },
                 required: ["xdr"],
               },
@@ -113,7 +129,8 @@ export const openApiSpec = {
     "/fee-bump/submit": {
       post: {
         summary: "Submit Fee-Bump Transaction",
-        description: "Wraps and immediately submits a transaction to the Stellar network using the fee sponsor account.",
+        description:
+          "Wraps and immediately submits a transaction to the Stellar network using the fee sponsor account.",
         requestBody: {
           required: true,
           content: {
@@ -121,7 +138,11 @@ export const openApiSpec = {
               schema: {
                 type: "object",
                 properties: {
-                  xdr: { type: "string", description: "Base64 encoded Stellar transaction envelope XDR.", example: "AAAAAG..." },
+                  xdr: {
+                    type: "string",
+                    description: "Base64 encoded Stellar transaction envelope XDR.",
+                    example: "AAAAAG...",
+                  },
                 },
                 required: ["xdr"],
               },
@@ -149,7 +170,8 @@ export const openApiSpec = {
     "/wallet/create": {
       post: {
         summary: "Create Seedless Wallet",
-        description: "Provisions a new sponsored Stellar account with multi-signature key configuration.",
+        description:
+          "Provisions a new sponsored Stellar account with multi-signature key configuration.",
         responses: {
           "200": {
             description: "Wallet created successfully",
@@ -169,10 +191,93 @@ export const openApiSpec = {
         },
       },
     },
+    "/wallet/{address}/transactions": {
+      get: {
+        summary: "Get Wallet Transaction History",
+        description:
+          "Retrieves the most recent Stellar transactions for a wallet from Horizon. Results are ordered newest first and can be paginated with cursor.",
+        parameters: [
+          {
+            name: "address",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+            description: "Stellar public key address of the wallet.",
+          },
+          {
+            name: "limit",
+            in: "query",
+            required: false,
+            schema: { type: "integer", minimum: 1, maximum: 200, default: 20 },
+          },
+          {
+            name: "cursor",
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+            description: "Horizon paging token from the previous response.",
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Wallet transaction history",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    address: { type: "string" },
+                    transactions: { type: "array", items: { type: "object" } },
+                    nextCursor: { type: "string", nullable: true },
+                  },
+                  required: ["address", "transactions", "nextCursor"],
+                },
+              },
+            },
+          },
+          "400": { description: "Invalid wallet address or pagination parameter" },
+        },
+      },
+    },
+    "/wallet/{address}/balance": {
+      get: {
+        summary: "Get Wallet Balance",
+        description:
+          "Retrieves the Stellar account balances for a wallet from Horizon, including native and trustline assets.",
+        parameters: [
+          {
+            name: "address",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+            description: "Stellar public key address of the wallet.",
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Wallet balances",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    address: { type: "string" },
+                    balances: { type: "array", items: { type: "object" } },
+                  },
+                  required: ["address", "balances"],
+                },
+              },
+            },
+          },
+          "400": { description: "Invalid wallet address" },
+        },
+      },
+    },
     "/policy": {
       post: {
         summary: "Create or Update Wallet Policy",
-        description: "Configures spend limit, velocity, or allowlist policy rules for a specific wallet.",
+        description:
+          "Configures spend limit, velocity, allowlist, or blocklist policy rules for a specific wallet.",
         requestBody: {
           required: true,
           content: {
@@ -180,7 +285,11 @@ export const openApiSpec = {
               schema: {
                 type: "object",
                 properties: {
-                  walletId: { type: "string", description: "Stellar public key address of the wallet.", example: "GAD7654..." },
+                  walletId: {
+                    type: "string",
+                    description: "Stellar public key address of the wallet.",
+                    example: "GAD7654...",
+                  },
                   rules: {
                     type: "array",
                     items: {
@@ -188,6 +297,7 @@ export const openApiSpec = {
                         { $ref: "#/components/schemas/SpendLimitRule" },
                         { $ref: "#/components/schemas/VelocityRule" },
                         { $ref: "#/components/schemas/AllowlistRule" },
+                        { $ref: "#/components/schemas/BlocklistRule" },
                       ],
                     },
                   },
@@ -237,6 +347,14 @@ export const openApiSpec = {
     },
   },
   components: {
+    securitySchemes: {
+      bearerAuth: {
+        type: "http",
+        scheme: "bearer",
+        bearerFormat: "API Key",
+        description: "API key passed in the Authorization: Bearer <api-key> header",
+      },
+    },
     schemas: {
       SpendLimitRule: {
         type: "object",
@@ -269,6 +387,26 @@ export const openApiSpec = {
         },
         required: ["type", "destinations"],
       },
+      BlocklistRule: {
+        type: "object",
+        properties: {
+          type: { type: "string", enum: ["blocklist"] },
+          destinations: {
+            type: "array",
+            items: { type: "string" },
+            example: ["GBAD..."],
+          },
+        },
+        required: ["type", "destinations"],
+      },
+      MaxOperationsRule: {
+        type: "object",
+        properties: {
+          type: { type: "string", enum: ["max_operations"] },
+          maxOperations: { type: "integer", example: 5 },
+        },
+        required: ["type", "maxOperations"],
+      },
       Policy: {
         type: "object",
         properties: {
@@ -281,4 +419,9 @@ export const openApiSpec = {
       },
     },
   },
+  security: [
+    {
+      bearerAuth: [],
+    },
+  ],
 };

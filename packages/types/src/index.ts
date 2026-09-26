@@ -7,9 +7,10 @@ export type {
   SpendLimit,
   VelocityRule,
   AllowlistRule,
+  BlocklistRule,
   SessionKeyPolicyRule,
   TimeBoundsRule,
-  RequireMemoRule,
+  MaxOperationsRule,
   PolicyStore,
 } from "./policy.js";
 export type { Signer } from "./signer.js";
@@ -20,3 +21,10 @@ export type {
   ContractInvocation,
   ContractSimulationResult,
 } from "./soroban.js";
+export type {
+  WebhookEventType,
+  WebhookConfig,
+  WebhookPayload,
+  WebhookDeliveryResult,
+  WebhookDeliveryLogEntry,
+} from "./webhook.js";

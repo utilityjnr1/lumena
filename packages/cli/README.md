@@ -9,6 +9,28 @@ Command-Line Interface (CLI) tool for inspecting wallets, managing policy specs,
 npx @lumen/cli --help
 ```
 
+## Global Options
+
+### `--json`
+
+Output machine-readable JSON instead of human-readable text. Available for all commands.
+
+```bash
+# Get status as JSON
+npx @lumen/cli status --json
+
+# Get policy as JSON
+npx @lumen/cli policy get G... --json
+
+# Create wallet and output JSON
+npx @lumen/cli wallet create --json
+
+# Inspect transaction XDR as JSON
+npx @lumen/cli cosign inspect "AAAAAgAAA..." --json
+```
+
+On error with `--json`, the CLI outputs `{ "error": "error message" }` to stderr and exits with a non-zero code.
+
 ## Commands Reference
 
 ### 1. `lumen status`
@@ -46,11 +68,25 @@ Triggers creation of a new test sponsored wallet on the server.
 npx @lumen/cli wallet create
 ```
 
-### 6. `lumen cosign inspect <xdr>`
+### 6. `lumen wallet balance <address>`
+Queries Horizon for all asset balances held by the specified address. Defaults to Stellar Testnet; use `--network` to select `mainnet` or `local`, or `--horizon-url` to provide a custom Horizon URL.
+
+```bash
+npx @lumen/cli wallet balance G... --network testnet
+```
+
+### 7. `lumen cosign inspect <xdr>`
 Decodes transaction XDR, displays operation details, and simulates policy checks.
 
 ```bash
 npx @lumen/cli cosign inspect "AAAAAgAAA..."
+```
+
+### 8. `lumen cosign submit <xdr> <walletAddress>`
+Submits a signed transaction XDR to the server's `/cosign` endpoint for policy validation and co-signing.
+
+```bash
+npx @lumen/cli cosign submit "AAAAAgAAA..." G...
 ```
 
 ---
@@ -120,4 +156,3 @@ pnpm --filter @lumen/cli clean
 ## License
 
 MIT
-

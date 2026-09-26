@@ -4,6 +4,9 @@ export type { LumenContextValue, LumenProviderProps } from "./context.js";
 export { useWallet } from "./use-wallet.js";
 export type { UseWalletResult } from "./use-wallet.js";
 
+export { useCreateWallet } from "./use-create-wallet.js";
+export type { CreateWalletResult, UseCreateWalletResult } from "./use-create-wallet.js";
+
 export { useBalance } from "./use-balance.js";
 export type { UseBalanceResult } from "./use-balance.js";
 
@@ -23,5 +26,9 @@ export type {
   UseSponsorStatusOptions,
   UseSponsorStatusResult,
 } from "./use-sponsor-status.js";
-export { useSimulateContract } from "./use-simulate-contract.js";
-export type { SimulateContractParams } from "./use-simulate-contract.js";
+export { useInvokeContract } from "./use-invoke-contract.js";
+export type {
+  InvokeContractParams,
+  InvokeContractResult,
+  UseInvokeContractResult,
+} from "./use-invoke-contract.js";
