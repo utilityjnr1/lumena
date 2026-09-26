@@ -22,8 +22,13 @@ export interface EvaluateResult {
   reason?: string;
 }
 
+export interface PolicyEngineOptions {
+  defaultPolicy?: "allow" | "deny";
+}
+
 export class PolicyEngine {
   private policies: Map<string, Policy> = new Map();
+  private readonly defaultPolicy: "allow" | "deny";
 
   // In-memory tracking for spend limit and velocity
   private readonly spendTracking: Map<
@@ -32,6 +37,10 @@ export class PolicyEngine {
   > = new Map();
   private readonly velocityTracking: Map<string, number[]> = new Map();
   private readonly sessionSpendTracking: Map<string, number> = new Map();
+
+  constructor(options: PolicyEngineOptions = {}) {
+    this.defaultPolicy = options.defaultPolicy ?? "allow";
+  }
 
   addPolicy(policy: Policy): void {
     this.policies.set(policy.walletId, policy);
@@ -51,7 +60,9 @@ export class PolicyEngine {
     const policy = this.policies.get(opts.walletAddress);
 
     if (!policy) {
-      return { approved: true };
+      return this.defaultPolicy === "allow"
+        ? { approved: true }
+        : { approved: false, reason: `No policy found for wallet ${opts.walletAddress}` };
     }
 
     for (const rule of policy.rules) {
