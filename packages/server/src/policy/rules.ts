@@ -3,6 +3,7 @@ import type {
   SpendLimit,
   VelocityRule,
   AllowlistRule,
+  BlocklistRule,
   TimeBoundsRule,
   MaxOperationsRule,
 } from "@lumen/types";
@@ -28,6 +29,11 @@ export function createVelocityPolicy(
 
 export function createAllowlistPolicy(walletId: string, destinations: string[]): Policy {
   const rule: AllowlistRule = { type: "allowlist", destinations };
+  return { id: crypto.randomUUID(), walletId, rules: [rule], createdAt: new Date() };
+}
+
+export function createBlocklistPolicy(walletId: string, destinations: string[]): Policy {
+  const rule: BlocklistRule = { type: "blocklist", destinations };
   return { id: crypto.randomUUID(), walletId, rules: [rule], createdAt: new Date() };
 }
 

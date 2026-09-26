@@ -1,17 +1,35 @@
 import { Command } from "commander";
-import { StrKey, TransactionBuilder } from "@stellar/stellar-sdk";
+import { Horizon, TransactionBuilder } from "@stellar/stellar-sdk";
 import fs from "node:fs";
 
 const program = new Command();
 
 program
   .name("lumen")
-  .description(
-    "Administrative CLI for managing Lumen wallets, policies, sponsor balances, and cosigning",
-  )
-  .version("0.1.0");
+  .description("Administrative CLI for managing Lumen wallets, policies, sponsor balances, and cosigning")
+  .version("0.1.0")
+  .option("--json", "Output machine-readable JSON instead of human-readable text")
+  .passGlobalOptions();
 
 const DEFAULT_SERVER_URL = process.env.LUMEN_SERVER_URL || "http://localhost:3000";
+type StellarNetwork = "testnet" | "mainnet" | "local";
+
+const HORIZON_URLS: Record<StellarNetwork, string> = {
+  testnet: "https://horizon-testnet.stellar.org",
+  mainnet: "https://horizon.stellar.org",
+  local: "http://localhost:8000",
+};
+
+function getStellarNetwork(value: string): StellarNetwork {
+  switch (value) {
+    case "testnet":
+    case "mainnet":
+    case "local":
+      return value;
+    default:
+      throw new Error(`Unsupported Stellar network: ${value}`);
+  }
+}
 
 program
   .command("status")
@@ -19,23 +37,35 @@ program
   .option("-s, --server <url>", "Lumen server URL", DEFAULT_SERVER_URL)
   .action(async (options) => {
     try {
-      console.log(`Connecting to Lumen server at ${options.server}...`);
       const healthRes = await fetch(`${options.server}/health`);
       if (!healthRes.ok) {
         throw new Error(`Health check failed with status ${healthRes.status}`);
       }
       const healthData = await healthRes.json();
-      console.log("Server Health:", JSON.stringify(healthData, null, 2));
 
       const sponsorRes = await fetch(`${options.server}/sponsor/status`);
+      let sponsorData = null;
       if (sponsorRes.ok) {
-        const sponsorData = await sponsorRes.json();
-        console.log("Sponsor Account Status:", JSON.stringify(sponsorData, null, 2));
+        sponsorData = await sponsorRes.json();
+      }
+
+      if (options.json) {
+        console.log(JSON.stringify({ health: healthData, sponsor: sponsorData }, null, 2));
       } else {
-        console.log("Sponsor status endpoint unavailable or returned status:", sponsorRes.status);
+        console.log(`Connecting to Lumen server at ${options.server}...`);
+        console.log("Server Health:", JSON.stringify(healthData, null, 2));
+        if (sponsorData) {
+          console.log("Sponsor Account Status:", JSON.stringify(sponsorData, null, 2));
+        } else {
+          console.log("Sponsor status endpoint unavailable or returned status:", sponsorRes.status);
+        }
       }
     } catch (err: any) {
-      console.error("Error fetching status:", err.message || err);
+      if (options.json) {
+        console.error(JSON.stringify({ error: err.message || String(err) }));
+      } else {
+        console.error("Error fetching status:", err.message || err);
+      }
       process.exit(1);
     }
   });
@@ -53,9 +83,17 @@ policyCmd
         throw new Error(`Failed to fetch policy: HTTP ${res.status}`);
       }
       const policy = await res.json();
-      console.log("Policy Spec:", JSON.stringify(policy, null, 2));
+      if (options.json) {
+        console.log(JSON.stringify(policy, null, 2));
+      } else {
+        console.log("Policy Spec:", JSON.stringify(policy, null, 2));
+      }
     } catch (err: any) {
-      console.error("Error getting policy:", err.message || err);
+      if (options.json) {
+        console.error(JSON.stringify({ error: err.message || String(err) }));
+      } else {
+        console.error("Error getting policy:", err.message || err);
+      }
       process.exit(1);
     }
   });
@@ -84,9 +122,17 @@ policyCmd
       }
 
       const created = await res.json();
-      console.log("Policy set successfully:", JSON.stringify(created, null, 2));
+      if (options.json) {
+        console.log(JSON.stringify(created, null, 2));
+      } else {
+        console.log("Policy set successfully:", JSON.stringify(created, null, 2));
+      }
     } catch (err: any) {
-      console.error("Error setting policy:", err.message || err);
+      if (options.json) {
+        console.error(JSON.stringify({ error: err.message || String(err) }));
+      } else {
+        console.error("Error setting policy:", err.message || err);
+      }
       process.exit(1);
     }
   });
@@ -110,9 +156,17 @@ policyCmd
         throw new Error(`Failed to delete policy: HTTP ${res.status} - ${errText}`);
       }
 
-      console.log(`Policy for wallet ${walletId} deleted successfully.`);
+      if (options.json) {
+        console.log(JSON.stringify({ success: true, walletId }, null, 2));
+      } else {
+        console.log(`Policy for wallet ${walletId} deleted successfully.`);
+      }
     } catch (err: any) {
-      console.error("Error deleting policy:", err.message || err);
+      if (options.json) {
+        console.error(JSON.stringify({ error: err.message || String(err) }));
+      } else {
+        console.error("Error deleting policy:", err.message || err);
+      }
       process.exit(1);
     }
   });
@@ -125,7 +179,6 @@ walletCmd
   .option("-s, --server <url>", "Lumen server URL", DEFAULT_SERVER_URL)
   .action(async (options) => {
     try {
-      console.log("Requesting wallet creation from server...");
       const res = await fetch(`${options.server}/wallet/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -136,35 +189,53 @@ walletCmd
       }
 
       const result = await res.json();
-      console.log("Wallet created successfully:");
-      console.log("Address:", result.address);
-      console.log("Public Key:", result.publicKey);
+      if (options.json) {
+        console.log(JSON.stringify(result, null, 2));
+      } else {
+        console.log("Wallet created successfully:");
+        console.log("Address:", result.address);
+        console.log("Public Key:", result.publicKey);
+      }
     } catch (err: any) {
-      console.error("Error creating wallet:", err.message || err);
+      if (options.json) {
+        console.error(JSON.stringify({ error: err.message || String(err) }));
+      } else {
+        console.error("Error creating wallet:", err.message || err);
+      }
       process.exit(1);
     }
   });
 
 walletCmd
-  .command("fund <address>")
-  .description("Funds a wallet on Stellar testnet using Friendbot")
-  .action(async (address: string) => {
+  .command("balance <address>")
+  .description("Check all asset balances for a Stellar wallet address")
+  .option("-n, --network <network>", "Stellar network (testnet, mainnet, or local)", "testnet")
+  .option("--horizon-url <url>", "Override the Stellar Horizon server URL")
+  .action(async (address, options) => {
     try {
-      if (!StrKey.isValidEd25519PublicKey(address)) {
-        throw new Error("Invalid Stellar public key");
-      }
+      const network = getStellarNetwork(options.network);
+      const horizonUrl = options.horizonUrl ?? HORIZON_URLS[network];
+      const horizon = new Horizon.Server(horizonUrl, {
+        allowHttp: network === "local" || horizonUrl.startsWith("http://"),
+      });
+      const account = await horizon.loadAccount(address);
+      const balances = account.balances.map((balance) => ({
+        asset:
+          balance.asset_type === "native"
+            ? "XLM"
+            : balance.asset_type === "liquidity_pool_shares"
+              ? `liquidity_pool:${balance.liquidity_pool_id}`
+              : `${balance.asset_code}:${balance.asset_issuer}`,
+        balance: balance.balance,
+      }));
 
-      const res = await fetch(`https://friendbot.stellar.org/?addr=${encodeURIComponent(address)}`);
-      if (!res.ok) {
-        const details = await res.text();
-        throw new Error(
-          `Friendbot funding failed: HTTP ${res.status}${details ? ` - ${details}` : ""}`,
-        );
-      }
-
-      console.log(`Funded ${address} on Stellar testnet.`);
+      console.log(`Balances for ${address}:`);
+      console.log(JSON.stringify(balances, null, 2));
     } catch (err: unknown) {
-      console.error("Error funding wallet:", err instanceof Error ? err.message : err);
+      console.error(
+        "Error fetching wallet balance:",
+        err instanceof Error ? err.message : String(err),
+      );
       process.exit(1);
     }
   });
@@ -184,20 +255,71 @@ cosignCmd
   .action((xdr, options) => {
     try {
       const tx = TransactionBuilder.fromXDR(xdr, options.networkPassphrase);
-      console.log("Decoded Transaction Details:");
-      console.log("Source Account:", (tx as any).source);
-      console.log("Fee:", (tx as any).fee);
-      console.log("Operations Count:", (tx as any).operations?.length || 0);
+      const source = (tx as any).source;
+      const fee = (tx as any).fee;
+      const operations = (tx as any).operations || [];
+      const opCount = operations.length;
 
-      if ((tx as any).operations) {
-        (tx as any).operations.forEach((op: any, index: number) => {
-          console.log(`  Op #${index + 1}: ${op.type}`);
+      const decodedOps = operations.map((op: any, index: number) => {
+        const opInfo: any = { index: index + 1, type: op.type };
+        if (op.destination) opInfo.destination = op.destination;
+        if (op.amount) opInfo.amount = op.amount;
+        return opInfo;
+      });
+
+      const output = {
+        sourceAccount: source,
+        fee,
+        operationsCount: opCount,
+        operations: decodedOps,
+      };
+
+      if (options.json) {
+        console.log(JSON.stringify(output, null, 2));
+      } else {
+        console.log("Decoded Transaction Details:");
+        console.log("Source Account:", source);
+        console.log("Fee:", fee);
+        console.log("Operations Count:", opCount);
+
+        decodedOps.forEach((op: any) => {
+          console.log(`  Op #${op.index}: ${op.type}`);
           if (op.destination) console.log(`    Destination: ${op.destination}`);
           if (op.amount) console.log(`    Amount: ${op.amount}`);
         });
       }
     } catch (err: any) {
-      console.error("Error decoding transaction XDR:", err.message || err);
+      if (options.json) {
+        console.error(JSON.stringify({ error: err.message || String(err) }));
+      } else {
+        console.error("Error decoding transaction XDR:", err.message || err);
+      }
+      process.exit(1);
+    }
+  });
+
+cosignCmd
+  .command("submit <xdr> <walletAddress>")
+  .description("Submit transaction XDR to the server for policy validation and cosigning")
+  .option("-s, --server <url>", "Lumen server URL", DEFAULT_SERVER_URL)
+  .action(async (xdr, walletAddress, options) => {
+    try {
+      const res = await fetch(`${options.server}/cosign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ xdr, walletAddress }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Cosign request failed: HTTP ${res.status} - ${errText}`);
+      }
+
+      const result = await res.json();
+      console.log("Transaction cosigned successfully:");
+      console.log(JSON.stringify(result, null, 2));
+    } catch (err: any) {
+      console.error("Error submitting transaction for cosigning:", err.message || err);
       process.exit(1);
     }
   });

@@ -7,6 +7,7 @@ export type {
   SpendLimit,
   VelocityRule,
   AllowlistRule,
+  BlocklistRule,
   SessionKeyPolicyRule,
   TimeBoundsRule,
   MaxOperationsRule,
