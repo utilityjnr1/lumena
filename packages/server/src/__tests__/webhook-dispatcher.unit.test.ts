@@ -1,5 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { WebhookDispatcher } from "../webhook/dispatcher.js";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import {
+  WebhookDispatcher,
+  type WebhookDispatcherOpts,
+  verifyWebhookSignature,
+} from "../webhook/dispatcher.js";
 import { createHmac } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -197,6 +201,67 @@ describe("WebhookDispatcher Unit Tests", () => {
     await expect(dispatcher.getDeliveryLog()).resolves.toMatchObject([
       { success: false, attempts: 1, error: "HTTP 400: " },
     ]);
+  });
+
+  it("retries on 429 Too Many Requests error", async () => {
+    const dispatcher = createDispatcher({
+      timeoutMs: 500,
+      maxRetries: 2,
+      initialDelayMs: 10,
+    });
+
+    let calls = 0;
+    globalThis.fetch = vi.fn().mockImplementation(async () => {
+      calls++;
+      if (calls < 3) {
+        return new Response("Too Many Requests", { status: 429 });
+      }
+      return new Response("OK", { status: 200 });
+    });
+
+    dispatcher.register({
+      id: "wh-429",
+      url: "https://example.com/429",
+      secret,
+      events: ["*"],
+    });
+
+    const results = await dispatcher.dispatch("transaction.sponsored", { hash: "abc" });
+    expect(results[0].success).toBe(true);
+    expect(results[0].attempts).toBe(3);
+    expect(calls).toBe(3);
+  });
+
+  it("verifies backoff delay grows exponentially", async () => {
+    const dispatcher = createDispatcher({
+      timeoutMs: 500,
+      maxRetries: 3,
+      initialDelayMs: 100,
+      backoffFactor: 2,
+    });
+
+    const timestamps: number[] = [];
+    globalThis.fetch = vi.fn().mockImplementation(async () => {
+      timestamps.push(Date.now());
+      return new Response("Internal Server Error", { status: 500 });
+    });
+
+    dispatcher.register({
+      id: "wh-backoff",
+      url: "https://example.com/backoff",
+      secret,
+      events: ["*"],
+    });
+
+    const startTime = Date.now();
+    await dispatcher.dispatch("transaction.sponsored", { hash: "abc" });
+    const totalTime = Date.now() - startTime;
+
+    // With maxRetries=3, we make 4 attempts total
+    // Delays should be: 0ms (first attempt), 100ms, 200ms, 400ms
+    // Total minimum time should be around 700ms
+    expect(timestamps).toHaveLength(4);
+    expect(totalTime).toBeGreaterThanOrEqual(600); // Allow some margin
   });
 
   it("persists delivery history and reloads it from a new dispatcher", async () => {
