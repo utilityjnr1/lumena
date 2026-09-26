@@ -137,6 +137,13 @@ export class PolicyEngine {
     }
     const track = walletTrack.get(trackKey)!;
 
+    if (txAmount > parseFloat(rule.maxPerTx)) {
+      return {
+        approved: false,
+        reason: `Transaction spending ${txAmount} exceeds per-tx limit ${rule.maxPerTx}`,
+      };
+    }
+
     if (track.dailyTotal + txAmount > parseFloat(rule.maxDaily)) {
       return {
         approved: false,

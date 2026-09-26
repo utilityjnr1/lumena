@@ -1,16 +1,31 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { WebhookDispatcher } from "../webhook/dispatcher.js";
 import { createHmac } from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 describe("WebhookDispatcher Unit Tests", () => {
   const secret = "test-webhook-secret-key";
+  let tempDir: string;
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "lumen-webhook-test-"));
   });
 
+  afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  const createDispatcher = (opts: WebhookDispatcherOpts = {}): WebhookDispatcher =>
+    new WebhookDispatcher({
+      ...opts,
+      deliveryLogPath: path.join(tempDir, "deliveries.jsonl"),
+    });
+
   it("registers, lists, and unregisters webhook configurations", () => {
-    const dispatcher = new WebhookDispatcher();
+    const dispatcher = createDispatcher();
     dispatcher.register({
       id: "wh-1",
       url: "https://example.com/webhook",
@@ -27,7 +42,7 @@ describe("WebhookDispatcher Unit Tests", () => {
   });
 
   it("generates correct HMAC-SHA256 signature", () => {
-    const dispatcher = new WebhookDispatcher();
+    const dispatcher = createDispatcher();
     const payload = JSON.stringify({ hello: "world" });
     const sig = dispatcher.generateSignature(payload, secret);
 
@@ -36,7 +51,7 @@ describe("WebhookDispatcher Unit Tests", () => {
   });
 
   it("filters events by webhook subscriptions and supports wildcards", async () => {
-    const dispatcher = new WebhookDispatcher({ timeoutMs: 1000, maxRetries: 0 });
+    const dispatcher = createDispatcher({ timeoutMs: 1000, maxRetries: 0 });
 
     const fetchMock = vi.fn().mockResolvedValue(new Response("ok", { status: 200 }));
     globalThis.fetch = fetchMock;
@@ -85,8 +100,35 @@ describe("WebhookDispatcher Unit Tests", () => {
     );
   });
 
+  it("dispatches wallet.created to matching webhook subscriptions", async () => {
+    const dispatcher = createDispatcher({ maxRetries: 0 });
+    const fetchMock = vi.fn().mockResolvedValue(new Response("ok", { status: 200 }));
+    globalThis.fetch = fetchMock;
+
+    dispatcher.register({
+      id: "wh-wallet-created",
+      url: "https://example.com/wallets",
+      secret,
+      events: ["wallet.created"],
+    });
+
+    const results = await dispatcher.dispatch("wallet.created", {
+      address: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+      publicKey: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].success).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://example.com/wallets",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "X-Lumen-Event": "wallet.created" }),
+      }),
+    );
+  });
+
   it("retries failed deliveries up to maxRetries on 500 error", async () => {
-    const dispatcher = new WebhookDispatcher({
+    const dispatcher = createDispatcher({
       timeoutMs: 500,
       maxRetries: 2,
       initialDelayMs: 10,
@@ -117,7 +159,7 @@ describe("WebhookDispatcher Unit Tests", () => {
   });
 
   it("does not retry on 4xx client errors (e.g. 400 Bad Request)", async () => {
-    const dispatcher = new WebhookDispatcher({
+    const dispatcher = createDispatcher({
       timeoutMs: 500,
       maxRetries: 3,
       initialDelayMs: 10,
@@ -140,5 +182,46 @@ describe("WebhookDispatcher Unit Tests", () => {
     expect(results[0].success).toBe(false);
     expect(results[0].attempts).toBe(1);
     expect(calls).toBe(1);
+    await expect(dispatcher.getDeliveryLog()).resolves.toMatchObject([
+      { success: false, attempts: 1, error: "HTTP 400: " },
+    ]);
+  });
+
+  it("persists delivery history and reloads it from a new dispatcher", async () => {
+    const logPath = path.join(tempDir, "persistent-deliveries.jsonl");
+    const fetchMock = vi.fn().mockResolvedValue(new Response("ok", { status: 200 }));
+    globalThis.fetch = fetchMock;
+
+    const dispatcher = new WebhookDispatcher({
+      maxRetries: 0,
+      deliveryLogPath: logPath,
+      webhooks: [
+        {
+          id: "wh-persistent",
+          url: "https://example.com/persistent",
+          secret,
+          events: ["transaction.cosigned"],
+        },
+      ],
+    });
+    const results = await dispatcher.dispatch("transaction.cosigned", { txHash: "abc" });
+
+    const restartedDispatcher = new WebhookDispatcher({ deliveryLogPath: logPath });
+    const history = await restartedDispatcher.getDeliveryLog();
+
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({
+      webhookId: results[0].webhookId,
+      url: results[0].url,
+      success: results[0].success,
+      statusCode: results[0].statusCode,
+      attempts: results[0].attempts,
+      event: "transaction.cosigned",
+      data: { txHash: "abc" },
+    });
+    expect(history[0].deliveryId).toBeTruthy();
+    expect(history[0].timestamp).toBeTruthy();
+    expect(history[0].deliveredAt).toBeTruthy();
+    expect(JSON.stringify(history)).not.toContain(secret);
   });
 });

@@ -339,6 +339,14 @@ export function createServer(opts: ServerOpts): ServerResult {
       });
 
       const result = await wallet.create();
+      void webhookDispatcher
+        .dispatch("wallet.created", {
+          address: result.address,
+          publicKey: result.publicKey,
+        })
+        .catch((error: unknown) => {
+          logger.error({ error }, "Failed to dispatch wallet.created webhook");
+        });
       res.json({ address: result.address, publicKey: result.publicKey });
     }),
   );
@@ -424,6 +432,13 @@ export function createServer(opts: ServerOpts): ServerResult {
     }
     res.status(204).send();
   });
+
+  app.get(
+    "/webhooks/deliveries",
+    wrapHandler(async (_req: Request, res: Response) => {
+      res.json(await webhookDispatcher.getDeliveryLog());
+    }),
+  );
 
   app.use(errorHandler);
 

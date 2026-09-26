@@ -1,4 +1,5 @@
 export type WebhookEventType =
+  | "wallet.created"
   | "transaction.cosigned"
   | "transaction.sponsored"
   | "transaction.fee_bump.submitted"
@@ -28,4 +29,12 @@ export interface WebhookDeliveryResult {
   statusCode?: number;
   attempts: number;
   error?: string;
+}
+
+export interface WebhookDeliveryLogEntry extends WebhookDeliveryResult {
+  deliveryId: string;
+  event: WebhookEventType;
+  timestamp: string;
+  deliveredAt: string;
+  data: unknown;
 }
