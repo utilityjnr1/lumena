@@ -7,7 +7,7 @@ import {
   type RequestListener,
   type IncomingMessage,
 } from "node:http";
-import { Keypair } from "@stellar/stellar-sdk";
+import { Keypair, StrKey } from "@stellar/stellar-sdk";
 import { StellarClient } from "@lumen/core";
 import type { Signer } from "@lumen/types";
 import { CosignerService } from "./cosigner/service.js";
@@ -69,7 +69,7 @@ export interface ServerOpts {
   webhookDispatcher?: WebhookDispatcher;
   /**
    * Optional CORS configuration passed to the `cors` npm package.
-   * Defaults to allowing all origins if omitted.
+   * Cross-origin access is disabled by default.
    */
   cors?: CorsOptions;
   /**
@@ -139,11 +139,7 @@ export function createServer(opts: ServerOpts): ServerResult {
   });
   app.use(express.json());
 
-  const corsOptions: CorsOptions = opts.cors ?? {
-    origin: "*",
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "x-request-id"],
-  };
+  const corsOptions: CorsOptions = opts.cors ?? { origin: false };
   app.use(cors(corsOptions));
 
   app.use((req: Request, res: Response, next: NextFunction) => {
@@ -385,7 +381,70 @@ export function createServer(opts: ServerOpts): ServerResult {
       });
 
       const result = await wallet.create();
+      void webhookDispatcher
+        .dispatch("wallet.created", {
+          address: result.address,
+          publicKey: result.publicKey,
+        })
+        .catch((error: unknown) => {
+          logger.error({ error }, "Failed to dispatch wallet.created webhook");
+        });
       res.json({ address: result.address, publicKey: result.publicKey });
+    }),
+  );
+
+  app.get(
+    "/wallet/:address/transactions",
+    wrapHandler(async (req: Request, res: Response) => {
+      const address = req.params.address as string;
+      if (!StrKey.isValidEd25519PublicKey(address)) {
+        throw new ValidationError("address must be a valid Stellar public key");
+      }
+
+      const limitParam = req.query.limit;
+      const limit = limitParam === undefined ? 20 : Number(limitParam);
+      if (
+        (limitParam !== undefined && typeof limitParam !== "string") ||
+        !Number.isInteger(limit) ||
+        limit < 1 ||
+        limit > 200
+      ) {
+        throw new ValidationError("limit must be an integer between 1 and 200");
+      }
+
+      const cursorParam = req.query.cursor;
+      if (cursorParam !== undefined && typeof cursorParam !== "string") {
+        throw new ValidationError("cursor must be a string");
+      }
+
+      let transactions = client
+        .horizon.transactions()
+        .forAccount(address)
+        .order("desc")
+        .limit(limit);
+      if (cursorParam) {
+        transactions = transactions.cursor(cursorParam);
+      }
+      const page = await transactions.call();
+      const records = page.records;
+      res.json({
+        address,
+        transactions: records,
+        nextCursor: records.at(-1)?.paging_token ?? null,
+      });
+    }),
+  );
+
+  app.get(
+    "/wallet/:address/balance",
+    wrapHandler(async (req: Request, res: Response) => {
+      const address = req.params.address as string;
+      if (!StrKey.isValidEd25519PublicKey(address)) {
+        throw new ValidationError("address must be a valid Stellar public key");
+      }
+
+      const account = await client.horizon.loadAccount(address);
+      res.json({ address, balances: account.balances });
     }),
   );
 
@@ -415,6 +474,13 @@ export function createServer(opts: ServerOpts): ServerResult {
     }
     res.status(204).send();
   });
+
+  app.get(
+    "/webhooks/deliveries",
+    wrapHandler(async (_req: Request, res: Response) => {
+      res.json(await webhookDispatcher.getDeliveryLog());
+    }),
+  );
 
   app.use(errorHandler);
 

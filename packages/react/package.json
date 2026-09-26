@@ -16,7 +16,8 @@
     "dev": "tsc --watch",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@lumen/core": "workspace:*",
@@ -30,6 +31,7 @@
     "@testing-library/react": "^16.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@vitest/coverage-v8": "^5.0.0",
     "jsdom": "^30.0.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

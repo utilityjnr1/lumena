@@ -7,6 +7,7 @@ export type {
   SpendLimit,
   VelocityRule,
   AllowlistRule,
+  BlocklistRule,
   SessionKeyPolicyRule,
   TimeBoundsRule,
   MaxOperationsRule,
@@ -20,3 +21,10 @@ export type {
   ContractInvocation,
   ContractSimulationResult,
 } from "./soroban.js";
+export type {
+  WebhookEventType,
+  WebhookConfig,
+  WebhookPayload,
+  WebhookDeliveryResult,
+  WebhookDeliveryLogEntry,
+} from "./webhook.js";

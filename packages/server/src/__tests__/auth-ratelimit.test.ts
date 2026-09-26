@@ -39,6 +39,18 @@ describe("API Key Authentication & Rate Limiting Middleware", () => {
     expect(body.status).toBe("ok");
   });
 
+  it("does not allow cross-origin requests by default", async () => {
+    const res = await fetch(`${baseUrl}/cosign`, {
+      method: "OPTIONS",
+      headers: {
+        Origin: "https://untrusted.example",
+        "Access-Control-Request-Method": "POST",
+      },
+    });
+
+    expect(res.headers.get("access-control-allow-origin")).toBeNull();
+  });
+
   it("allows /metrics without an API key", async () => {
     const res = await fetch(`${baseUrl}/metrics`);
     expect(res.status).toBe(200);

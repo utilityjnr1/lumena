@@ -12,15 +12,15 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@v3
         with:
           version: 9
 
@@ -30,7 +30,7 @@ jobs:
           echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
       - name: Cache pnpm dependencies
-        uses: actions/cache@v6
+        uses: actions/cache@v4
         with:
           path: ${{ env.STORE_PATH }}
           key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -46,5 +46,74 @@ jobs:
       - name: Build packages
         run: pnpm build
 
-      - name: Run unit tests
-        run: pnpm test
+      - name: Run unit tests with coverage
+        run: pnpm --filter "@lumen/core" test:coverage && pnpm --filter "@lumen/server" test:coverage && pnpm --filter "@lumen/web-sdk" test:coverage && pnpm --filter "@lumen/react" test:coverage
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-reports
+          path: |
+            packages/core/coverage/
+            packages/server/coverage/
+            packages/web-sdk/coverage/
+            packages/react/coverage/
+          retention-days: 14
+
+      - name: Post coverage summary comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const packages = ['core', 'server', 'web-sdk', 'react'];
+            let body = '## 📊 Test Coverage Summary\n\n';
+            body += '| Package | Statements | Branches | Functions | Lines |\n';
+            body += '|---------|-----------|----------|-----------|-------|\n';
+
+            for (const pkg of packages) {
+              const summaryPath = path.join('packages', pkg, 'coverage', 'coverage-summary.json');
+              if (!fs.existsSync(summaryPath)) {
+                body += `| @lumen/${pkg} | N/A | N/A | N/A | N/A |\n`;
+                continue;
+              }
+              try {
+                const summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
+                const t = summary.total;
+                const fmt = (v) => `${v.pct}% (${v.covered}/${v.total})`;
+                body += `| @lumen/${pkg} | ${fmt(t.statements)} | ${fmt(t.branches)} | ${fmt(t.functions)} | ${fmt(t.lines)} |\n`;
+              } catch {
+                body += `| @lumen/${pkg} | error | error | error | error |\n`;
+              }
+            }
+
+            body += '\n> Coverage reports uploaded as workflow artifacts.';
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find(c =>
+              c.user.type === 'Bot' && c.body.startsWith('## 📊 Test Coverage Summary')
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

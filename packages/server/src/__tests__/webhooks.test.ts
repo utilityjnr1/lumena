@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
-import { Keypair, Account, TransactionBuilder, Operation, Asset, BASE_FEE, Networks } from "@stellar/stellar-sdk";
+import {
+  Keypair,
+  Account,
+  TransactionBuilder,
+  Operation,
+  Asset,
+  BASE_FEE,
+  Networks,
+} from "@stellar/stellar-sdk";
 import { createServer, type ServerResult } from "../server.js";
 import { EnvSigner } from "../signers/EnvSigner.js";
 
@@ -67,6 +75,31 @@ describe("Webhooks API & Server Integration", () => {
     expect(listAfter.some((w: any) => w.id === webhookId)).toBe(false);
   });
 
+  it("returns persistent delivery history via API", async () => {
+    const history = [
+      {
+        deliveryId: "delivery-1",
+        event: "transaction.cosigned" as const,
+        timestamp: "2026-09-25T12:00:00.000Z",
+        deliveredAt: "2026-09-25T12:00:01.000Z",
+        webhookId: "wh-1",
+        url: "https://example.com/webhook",
+        success: false,
+        statusCode: 500,
+        attempts: 3,
+        error: "HTTP 500",
+        data: { txHash: "abc" },
+      },
+    ];
+    vi.spyOn(serverResult.webhookDispatcher, "getDeliveryLog").mockResolvedValue(history);
+
+    const response = await fetch(`${BASE_URL}/webhooks/deliveries`);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual(history);
+    vi.restoreAllMocks();
+  });
+
   it("dispatches transaction.cosigned webhook event on successful cosign", async () => {
     const dispatchSpy = vi.spyOn(serverResult.webhookDispatcher, "dispatch");
 
@@ -82,7 +115,7 @@ describe("Webhooks API & Server Integration", () => {
           destination: Keypair.random().publicKey(),
           asset: Asset.native(),
           amount: "10",
-        })
+        }),
       )
       .setTimeout(180)
       .build();
@@ -106,7 +139,7 @@ describe("Webhooks API & Server Integration", () => {
       "transaction.cosigned",
       expect.objectContaining({
         walletAddress: userKeypair.publicKey(),
-      })
+      }),
     );
   });
 });

@@ -69,6 +69,7 @@ export class LumenClient {
       client: this.client,
       sponsorKeypair: this.sponsorKeypair,
       serverPublicKey: this.serverPublicKey,
+      serverUrl: this.serverUrl,
     });
 
     const { address } = await wallet.create();
@@ -92,6 +93,7 @@ export class LumenClient {
       client: this.client,
       sponsorKeypair: this.sponsorKeypair,
       serverPublicKey: this.serverPublicKey,
+      serverUrl: this.serverUrl,
       ownerKeypair: keypair,
     });
 
@@ -166,44 +168,6 @@ export class LumenClient {
         );
       }
       asset = knownAsset;
-    }
-
-    if (this.serverUrl) {
-      const signedXdr = await wallet.buildPaymentTransaction(destination, asset, amount);
-
-      const cosignRes = await fetch(`${this.serverUrl}/cosign`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          xdr: signedXdr,
-          walletAddress: wallet.address,
-        }),
-      });
-
-      if (!cosignRes.ok) {
-        const errorData = await cosignRes.json().catch(() => ({}));
-        throw new Error(errorData.error ?? `Cosign rejected with status ${cosignRes.status}`);
-      }
-
-      const { signedXdr: fullySignedXdr } = await cosignRes.json();
-
-      const submitRes = await fetch(`${this.serverUrl}/fee-bump/submit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          xdr: fullySignedXdr,
-        }),
-      });
-
-      if (!submitRes.ok) {
-        const errorData = await submitRes.json().catch(() => ({}));
-        throw new Error(
-          errorData.error ?? `Fee-bump submit failed with status ${submitRes.status}`,
-        );
-      }
-
-      const result = await submitRes.json();
-      return { hash: result.hash };
     }
 
     return wallet.send(destination, asset, amount);

@@ -34,6 +34,18 @@ Both keys are therefore **high-value custodial secrets**.  They must never
 appear in application logs, crash dumps, environment variables in plain text
 in production, or version control.
 
+## Browser wallet key storage
+
+`@lumen/core`'s `KeyManager` stores encrypted key records in browser
+`localStorage` by default, so they remain available after a refresh or tab
+closure. The records contain AES-GCM ciphertext, not plaintext secret keys;
+the passphrase is required to load a key. Applications can inject a
+`KeyStorage` implementation when they need a different persistent backend.
+Non-browser runtimes without `localStorage` use in-memory storage by default.
+Because browser storage is accessible to same-origin scripts, protect the
+application against cross-site scripting and do not treat `localStorage` as a
+trusted secret store.
+
 ---
 
 ## 2. Default (dev) configuration
