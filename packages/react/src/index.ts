@@ -4,8 +4,8 @@ export type { LumenContextValue, LumenProviderProps } from "./context.js";
 export { useWallet } from "./use-wallet.js";
 export type { UseWalletResult } from "./use-wallet.js";
 
-export { useCreateWalletWithPasskey } from "./use-create-wallet-with-passkey.js";
-export type { UseCreateWalletWithPasskeyResult } from "./use-create-wallet-with-passkey.js";
+export { useCreateWallet } from "./use-create-wallet.js";
+export type { CreateWalletResult, UseCreateWalletResult } from "./use-create-wallet.js";
 
 export { useBalance } from "./use-balance.js";
 export type { UseBalanceResult } from "./use-balance.js";

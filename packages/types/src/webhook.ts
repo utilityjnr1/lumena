@@ -2,6 +2,7 @@ export type WebhookEventType =
   | "wallet.created"
   | "transaction.cosigned"
   | "transaction.sponsored"
+  | "transaction.fee_bump.submitted"
   | "policy.violated"
   | "balance.low"
   | "*";

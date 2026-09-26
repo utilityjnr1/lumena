@@ -6,8 +6,66 @@ export interface StoredKey {
   createdAt: Date;
 }
 
+export interface KeyStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  key(index: number): string | null;
+  readonly length: number;
+}
+
+const STORAGE_PREFIX = "lumen:key-manager:";
+
+function createMemoryStorage(): KeyStorage {
+  const values = new Map<string, string>();
+  return {
+    get length() {
+      return values.size;
+    },
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+    key: (index) => Array.from(values.keys())[index] ?? null,
+  };
+}
+
+function getDefaultStorage(): KeyStorage {
+  return typeof globalThis.localStorage === "undefined"
+    ? createMemoryStorage()
+    : globalThis.localStorage;
+}
+
+function parseStoredKey(value: string): StoredKey {
+  const parsed: unknown = JSON.parse(value);
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("Stored key data is invalid");
+  }
+
+  const candidate = parsed as Record<string, unknown>;
+  if (
+    typeof candidate.publicKey !== "string" ||
+    typeof candidate.encryptedSecret !== "string" ||
+    typeof candidate.createdAt !== "string"
+  ) {
+    throw new Error("Stored key data is invalid");
+  }
+
+  const createdAt = new Date(candidate.createdAt);
+  if (Number.isNaN(createdAt.getTime())) {
+    throw new Error("Stored key creation date is invalid");
+  }
+
+  return {
+    publicKey: candidate.publicKey,
+    encryptedSecret: candidate.encryptedSecret,
+    createdAt,
+  };
+}
+
 export class KeyManager {
-  private keys: Map<string, StoredKey> = new Map();
+  private readonly storage: KeyStorage;
+
+  constructor(storage: KeyStorage = getDefaultStorage()) {
+    this.storage = storage;
+  }
 
   generateKeypair(): Keypair {
     return Keypair.random();
@@ -74,13 +132,14 @@ export class KeyManager {
       encryptedSecret,
       createdAt: new Date(),
     };
-    this.keys.set(key.publicKey(), stored);
+    this.storage.setItem(`${STORAGE_PREFIX}${stored.publicKey}`, JSON.stringify(stored));
     return stored;
   }
 
   async load(publicKey: string, passphrase: string): Promise<Keypair> {
-    const stored = this.keys.get(publicKey);
-    if (!stored) throw new Error(`Key not found: ${publicKey}`);
+    const storedValue = this.storage.getItem(`${STORAGE_PREFIX}${publicKey}`);
+    if (storedValue === null) throw new Error(`Key not found: ${publicKey}`);
+    const stored = parseStoredKey(storedValue);
 
     const [saltB64, ivB64, cipherB64] = stored.encryptedSecret.split(".");
     const salt = Buffer.from(saltB64, "base64");
@@ -120,6 +179,16 @@ export class KeyManager {
   }
 
   list(): StoredKey[] {
-    return Array.from(this.keys.values());
+    const storedKeys: StoredKey[] = [];
+    for (let index = 0; index < this.storage.length; index++) {
+      const storageKey = this.storage.key(index);
+      if (storageKey?.startsWith(STORAGE_PREFIX)) {
+        const value = this.storage.getItem(storageKey);
+        if (value !== null) {
+          storedKeys.push(parseStoredKey(value));
+        }
+      }
+    }
+    return storedKeys;
   }
 }

@@ -191,38 +191,85 @@ export const openApiSpec = {
         },
       },
     },
-    "/webhooks/deliveries": {
+    "/wallet/{address}/transactions": {
       get: {
-        summary: "Get Webhook Delivery History",
+        summary: "Get Wallet Transaction History",
         description:
-          "Returns persisted delivery outcomes, including successful and failed webhook deliveries.",
+          "Retrieves the most recent Stellar transactions for a wallet from Horizon. Results are ordered newest first and can be paginated with cursor.",
+        parameters: [
+          {
+            name: "address",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+            description: "Stellar public key address of the wallet.",
+          },
+          {
+            name: "limit",
+            in: "query",
+            required: false,
+            schema: { type: "integer", minimum: 1, maximum: 200, default: 20 },
+          },
+          {
+            name: "cursor",
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+            description: "Horizon paging token from the previous response.",
+          },
+        ],
         responses: {
           "200": {
-            description: "Persisted webhook delivery records",
+            description: "Wallet transaction history",
             content: {
               "application/json": {
                 schema: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      deliveryId: { type: "string" },
-                      event: { type: "string" },
-                      webhookId: { type: "string" },
-                      url: { type: "string" },
-                      success: { type: "boolean" },
-                      statusCode: { type: "number" },
-                      attempts: { type: "number" },
-                      error: { type: "string" },
-                      timestamp: { type: "string", format: "date-time" },
-                      deliveredAt: { type: "string", format: "date-time" },
-                      data: {},
-                    },
+                  type: "object",
+                  properties: {
+                    address: { type: "string" },
+                    transactions: { type: "array", items: { type: "object" } },
+                    nextCursor: { type: "string", nullable: true },
                   },
+                  required: ["address", "transactions", "nextCursor"],
                 },
               },
             },
           },
+          "400": { description: "Invalid wallet address or pagination parameter" },
+        },
+      },
+    },
+    "/wallet/{address}/balance": {
+      get: {
+        summary: "Get Wallet Balance",
+        description:
+          "Retrieves the Stellar account balances for a wallet from Horizon, including native and trustline assets.",
+        parameters: [
+          {
+            name: "address",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+            description: "Stellar public key address of the wallet.",
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Wallet balances",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    address: { type: "string" },
+                    balances: { type: "array", items: { type: "object" } },
+                  },
+                  required: ["address", "balances"],
+                },
+              },
+            },
+          },
+          "400": { description: "Invalid wallet address" },
         },
       },
     },
@@ -230,7 +277,7 @@ export const openApiSpec = {
       post: {
         summary: "Create or Update Wallet Policy",
         description:
-          "Configures spend limit, velocity, or allowlist policy rules for a specific wallet.",
+          "Configures spend limit, velocity, allowlist, or blocklist policy rules for a specific wallet.",
         requestBody: {
           required: true,
           content: {
@@ -250,6 +297,7 @@ export const openApiSpec = {
                         { $ref: "#/components/schemas/SpendLimitRule" },
                         { $ref: "#/components/schemas/VelocityRule" },
                         { $ref: "#/components/schemas/AllowlistRule" },
+                        { $ref: "#/components/schemas/BlocklistRule" },
                       ],
                     },
                   },
@@ -335,6 +383,18 @@ export const openApiSpec = {
             type: "array",
             items: { type: "string" },
             example: ["GCB2..."],
+          },
+        },
+        required: ["type", "destinations"],
+      },
+      BlocklistRule: {
+        type: "object",
+        properties: {
+          type: { type: "string", enum: ["blocklist"] },
+          destinations: {
+            type: "array",
+            items: { type: "string" },
+            example: ["GBAD..."],
           },
         },
         required: ["type", "destinations"],

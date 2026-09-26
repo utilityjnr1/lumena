@@ -15,6 +15,7 @@ import { LumenClient } from "@lumen/web-sdk";
 import {
   LumenProvider,
   useWallet,
+  useCreateWallet,
   useBalance,
   useSendPayment,
 } from "@lumen/react";
@@ -42,6 +43,20 @@ function WalletDetails({ walletId }: { walletId: string }) {
   return <p>Address: {wallet?.address}</p>;
 }
 
+function CreateWalletButton() {
+  const { createWallet, loading, error, data } = useCreateWallet();
+
+  return (
+    <>
+      <button onClick={() => void createWallet()} disabled={loading}>
+        {loading ? "Creating..." : "Create wallet"}
+      </button>
+      {error && <p>Error: {error.message}</p>}
+      {data && <p>Wallet address: {data.address}</p>}
+    </>
+  );
+}
+
 function SendPaymentButton() {
   const { sendPayment, loading, error } = useSendPayment();
 
@@ -67,6 +82,7 @@ function SendPaymentButton() {
 export function App() {
   return (
     <LumenProvider client={lumenClient}>
+      <CreateWalletButton />
       <WalletBalance walletId="wallet-id" />
       <WalletDetails walletId="wallet-id" />
       <SendPaymentButton />
@@ -107,15 +123,15 @@ Returns the wallet associated with the supplied wallet ID.
 const { wallet, error, refetch } = useWallet(walletId);
 ```
 
-### `useCreateWalletWithPasskey()`
+### `useCreateWallet()`
 
-Creates a wallet using a newly registered passkey and exposes loading, error, and result state.
+Creates a wallet through the configured `LumenClient` and exposes loading, error, and result state.
 
 ```tsx
-const { createWalletWithPasskey, loading, error, data } =
-  useCreateWalletWithPasskey();
+const { createWallet, loading, error, data, reset } = useCreateWallet();
 
-await createWalletWithPasskey({ username: "alice" });
+const wallet = await createWallet();
+console.log(wallet.address, wallet.id);
 ```
 
 ### `useBalance(walletId, assetCode?)`

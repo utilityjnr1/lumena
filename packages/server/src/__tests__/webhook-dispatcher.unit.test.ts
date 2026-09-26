@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { WebhookDispatcher, type WebhookDispatcherOpts } from "../webhook/dispatcher.js";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { WebhookDispatcher } from "../webhook/dispatcher.js";
 import { createHmac } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -86,6 +86,18 @@ describe("WebhookDispatcher Unit Tests", () => {
     fetchMock.mockClear();
     await dispatcher.dispatch("transaction.cosigned", { txHash: "1234" });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    fetchMock.mockClear();
+    await dispatcher.dispatch("transaction.fee_bump.submitted", { hash: "fee-bump-hash" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://example.com/all",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "X-Lumen-Event": "transaction.fee_bump.submitted",
+        }),
+      }),
+    );
   });
 
   it("dispatches wallet.created to matching webhook subscriptions", async () => {

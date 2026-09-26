@@ -11,7 +11,7 @@ export {
   type MergeAccountOpts,
   type TrustlineOpts,
 } from "./stellar/account-helpers.js";
-export { KeyManager } from "./keys/manager.js";
+export { KeyManager, type KeyStorage } from "./keys/manager.js";
 export { PasskeyManager, type PasskeyCredential, type PasskeyRegistrationOpts, type PasskeyAssertionOpts } from "./keys/passkey.js";
 export { Wallet } from "./wallet/wallet.js";
 export { Sep41Token } from "./stellar/sep41.js";

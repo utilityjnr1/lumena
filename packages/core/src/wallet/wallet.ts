@@ -11,11 +11,12 @@ export interface WalletOpts {
   client: StellarClient;
   sponsorKeypair: Keypair;
   serverPublicKey: string;
+  serverUrl?: string;
   ownerKeypair?: Keypair;
   /**
    * Optional KeyManager instance to inject. If not provided, a new default
-   * KeyManager is created internally. Inject a custom instance to use
-   * localStorage-backed storage or to facilitate unit testing.
+   * KeyManager is created internally. Inject a custom instance to use another
+   * persistent storage backend or to facilitate unit testing.
    */
   keyManager?: KeyManager;
 }
@@ -43,6 +44,7 @@ export class Wallet {
   private client: StellarClient;
   private sponsorKeypair: Keypair;
   private serverPublicKey: string;
+  private serverUrl?: string;
   private keyManager: KeyManager;
   private _address: string | null = null;
   private _keypair: Keypair | null = null;
@@ -63,6 +65,7 @@ export class Wallet {
     this.client = opts.client;
     this.sponsorKeypair = opts.sponsorKeypair;
     this.serverPublicKey = opts.serverPublicKey;
+    this.serverUrl = opts.serverUrl?.replace(/\/+$/, "");
     this.initialOwnerKeypair = opts.ownerKeypair;
     this.keyManager = opts.keyManager ?? new KeyManager();
     if (opts.ownerKeypair) {
@@ -118,33 +121,59 @@ export class Wallet {
   /** Builds, signs, and submits a payment from the wallet account. */
   async send(destination: string, asset: Asset, amount: string): Promise<{ hash: string }> {
     if (!this._keypair) throw new Error("Wallet not initialized");
-
-    const account = await this.client.horizon.loadAccount(this.address);
-
-    const tx = new TransactionBuilder(account, {
-      fee: BASE_FEE,
-      networkPassphrase: this.client.networkPassphrase,
-    })
-      .addOperation(
-        Operation.payment({
-          destination,
-          asset,
-          amount,
-        }),
-      )
-      .setTimeout(180)
-      .build();
-
-    tx.sign(this._keypair);
-
-    const result = await this.client.horizon.submitTransaction(tx);
-
-    if (result.successful) {
-      this.recordTransaction(asset, amount);
-      return { hash: result.hash };
+    if (!this.serverUrl) {
+      throw new Error("A Lumen server URL is required to send payments through policy enforcement");
     }
 
-    throw new Error(`Payment failed: ${result.hash}`);
+    const signedXdr = await this.buildPaymentTransaction(destination, asset, amount);
+    const cosignResponse = await fetch(`${this.serverUrl}/cosign`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ xdr: signedXdr, walletAddress: this.address }),
+    });
+    if (!cosignResponse.ok) {
+      const details = await cosignResponse.text();
+      throw new Error(
+        `Cosign rejected with status ${cosignResponse.status}${details ? `: ${details}` : ""}`,
+      );
+    }
+
+    const cosignResult: unknown = await cosignResponse.json();
+    if (
+      typeof cosignResult !== "object" ||
+      cosignResult === null ||
+      !("signedXdr" in cosignResult) ||
+      typeof cosignResult.signedXdr !== "string" ||
+      cosignResult.signedXdr.length === 0
+    ) {
+      throw new Error("Cosign response did not contain a signed transaction");
+    }
+
+    const submitResponse = await fetch(`${this.serverUrl}/fee-bump/submit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ xdr: cosignResult.signedXdr }),
+    });
+    if (!submitResponse.ok) {
+      const details = await submitResponse.text();
+      throw new Error(
+        `Fee-bump submission failed with status ${submitResponse.status}${details ? `: ${details}` : ""}`,
+      );
+    }
+
+    const submitResult: unknown = await submitResponse.json();
+    if (
+      typeof submitResult !== "object" ||
+      submitResult === null ||
+      !("hash" in submitResult) ||
+      typeof submitResult.hash !== "string" ||
+      submitResult.hash.length === 0
+    ) {
+      throw new Error("Fee-bump response did not contain a transaction hash");
+    }
+
+    this.recordTransaction(asset, amount);
+    return { hash: submitResult.hash };
   }
 
   async buildPaymentTransaction(
