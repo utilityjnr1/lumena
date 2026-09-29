@@ -1,28 +1,23 @@
 {
-  "name": "@lumen/cli",
+  "name": "@handsoff/cli",
   "version": "0.1.0",
-  "description": "Lumen Administrative Command-Line Tool",
+  "private": true,
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
   "bin": {
-    "lumen": "./bin/lumen.js"
+    "handsoff": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc",
-    "clean": "rm -rf dist",
-    "dev": "tsc --watch",
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src/"
+    "lint": "eslint .",
+    "test": "vitest run"
   },
   "dependencies": {
-    "commander": "^15.0.0",
-    "@lumen/core": "workspace:*",
-    "@lumen/types": "workspace:*",
-    "@stellar/stellar-sdk": "^17.0.1"
+    "@handsoff/core": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^26.5.1",
-    "typescript": "^5.8.0"
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
   }
 }
