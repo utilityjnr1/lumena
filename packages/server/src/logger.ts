@@ -1,53 +1,72 @@
-import pino from "pino";
-import { pinoHttp } from "pino-http";
-import type { IncomingMessage } from "node:http";
-import { randomUUID } from "node:crypto";
+import pino from 'pino';
 
-const VALID_LOG_LEVELS = ["trace", "debug", "info", "warn", "error", "fatal"] as const;
-type LogLevel = (typeof VALID_LOG_LEVELS)[number];
-
-function resolveLogLevel(): LogLevel {
-  const raw = process.env.LUMEN_LOG_LEVEL;
-  if (raw && (VALID_LOG_LEVELS as readonly string[]).includes(raw)) {
-    return raw as LogLevel;
-  }
-  return "info";
-}
-
-const logLevel = resolveLogLevel();
+const isProduction = process.env.NODE_ENV === 'production';
 
 export const logger = pino({
-  level: logLevel,
+  level: process.env.LOG_LEVEL || (isProduction ? 'info' : 'debug'),
+  // In production, avoid leaking internal details (stack traces, raw values)
+  // into logs that may be surfaced to clients. Structured logging keeps
+  // internal diagnostics server-side only.
   redact: {
     paths: [
-      "req.headers.authorization",
-      "req.headers.cookie",
-      "*.secret",
-      "*.privateKey",
-      "*.secretSeed",
-      "*.authorization",
-      "*.token",
-      "password",
-      "secret",
-      "secretSeed",
-      "privateKey",
-      "authorization",
-      "token",
-      "cosignerSecret",
-      "feePayerSecret",
-      "sponsorSecret",
+      'err.stack',
+      'error.stack',
+      'stack',
+      'txHash',
+      'transactionHash',
+      'hash',
+      '*.txHash',
+      '*.transactionHash',
+      '*.hash',
     ],
-    censor: "[REDACTED]",
+    remove: true,
   },
+  ...(isProduction
+    ? {}
+    : {
+        transport: {
+          target: 'pino-pretty',
+          options: { colorize: true },
+        },
+      }),
 });
 
-export const httpLogger = (pinoHttp as unknown as typeof pinoHttp)({
-  logger,
-  genReqId: (req: IncomingMessage) => (req.headers["x-request-id"] as string) || randomUUID(),
-  customAttributeKeys: {
-    req: "req",
-    res: "res",
-    err: "err",
-    responseTime: "responseTime",
-  },
-});
+/**
+ * Sanitize an error message for safe inclusion in API responses.
+ *
+ * In production, internal details such as stack traces and raw Stellar
+ * transaction hashes must never be returned to clients. Internal details
+ * are logged via Pino instead.
+ */
+export function sanitizeErrorMessage(
+  error: unknown,
+  fallback = 'An unexpected error occurred',
+): string {
+  const message =
+    error instanceof Error ? error.message : typeof error === 'string' ? error : fallback;
+
+  if (isProduction) {
+    // Log the full internal detail server-side, return a generic message.
+    logger.error({ err: error }, 'Internal error sanitized for API response');
+    return fallback;
+  }
+
+  return message;
+}
+
+/**
+ * Strip stack traces from an error object before it is serialized into an
+ * API response. In production the stack is removed entirely; in other
+ * environments it is preserved for debugging.
+ */
+export function sanitizeError(error: unknown): Record<string, unknown> {
+  const base: Record<string, unknown> = {
+    message: sanitizeErrorMessage(error),
+  };
+
+  if (!isProduction && error instanceof Error && error.stack) {
+    base.stack = error.stack;
+  }
+
+  return base;
+}
