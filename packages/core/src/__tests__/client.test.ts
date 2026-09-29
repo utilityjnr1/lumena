@@ -13,4 +13,53 @@ describe("core/client configuration", () => {
     expect(client.config.network).toBe("mainnet");
     expect(client.config.horizonUrl).toBe("https://horizon.stellar.org");
   });
+
+  it("exposes a batch cosign helper that processes each request", async () => {
+    const client = new StellarClient();
+    const requests = [
+      { xdr: "AAAA", walletAddress: "GAAA" },
+      { xdr: "BBBB", walletAddress: "GBBB" },
+    ];
+
+    const results = await client.cosignBatch(requests, async (req) => ({
+      signedXdr: `${req.xdr}-signed`,
+      approved: true,
+      reason: "ok",
+    }));
+
+    expect(results).toHaveLength(2);
+    expect(results[0]).toEqual({
+      signedXdr: "AAAA-signed",
+      approved: true,
+      reason: "ok",
+    });
+    expect(results[1]).toEqual({
+      signedXdr: "BBBB-signed",
+      approved: true,
+      reason: "ok",
+    });
+  });
+
+  it("returns a per-request rejection result when a batch item fails", async () => {
+    const client = new StellarClient();
+    const requests = [
+      { xdr: "AAAA", walletAddress: "GAAA" },
+      { xdr: "BBBB", walletAddress: "GBBB" },
+    ];
+
+    const results = await client.cosignBatch(requests, async (req) => {
+      if (req.xdr === "BBBB") {
+        throw new Error("policy rejected");
+      }
+      return { signedXdr: `${req.xdr}-signed`, approved: true, reason: "ok" };
+    });
+
+    expect(results).toHaveLength(2);
+    expect(results[0].approved).toBe(true);
+    expect(results[1]).toEqual({
+      signedXdr: "",
+      approved: false,
+      reason: "policy rejected",
+    });
+  });
 });

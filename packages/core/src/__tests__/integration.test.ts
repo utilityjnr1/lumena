@@ -9,6 +9,7 @@ import { Wallet } from "../wallet/wallet.js";
 
 const HORIZON_URL = process.env.HORIZON_URL ?? "http://localhost:8000";
 const RPC_URL = process.env.RPC_URL ?? "http://localhost:8000/rpc";
+const SERVER_URL = process.env.SERVER_URL ?? "http://localhost:3000";
 
 async function isLocalNetworkAvailable(): Promise<boolean> {
   try {
@@ -20,6 +21,17 @@ async function isLocalNetworkAvailable(): Promise<boolean> {
 }
 const localAvailable = await isLocalNetworkAvailable();
 const describeNetwork = localAvailable ? describe : describe.skip;
+
+async function isServerAvailable(): Promise<boolean> {
+  try {
+    const res = await fetch(`${SERVER_URL}/health`, { signal: AbortSignal.timeout(1000) });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+const serverAvailable = await isServerAvailable();
+const describeServer = serverAvailable ? describe : describe.skip;
 
 function getClient() {
   return new StellarClient({
@@ -230,5 +242,29 @@ describeNetwork("Wallet", () => {
     // Verify wallet has balance (0 since sponsored)
     const balance = await wallet.getBalance();
     expect(balance).toBeDefined();
+  });
+});
+
+describeServer("POST /cosign/batch", () => {
+  it("returns one result per batched request", async () => {
+    const res = await fetch(`${SERVER_URL}/cosign/batch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        requests: [
+          { xdr: "invalid-xdr", walletAddress: Keypair.random().publicKey() },
+          { xdr: "invalid-xdr", walletAddress: Keypair.random().publicKey() },
+        ],
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(Array.isArray(body.results)).toBe(true);
+    expect(body.results).toHaveLength(2);
+    for (const result of body.results) {
+      expect(result).toHaveProperty("approved");
+      expect(result).toHaveProperty("reason");
+    }
   });
 });
