@@ -15,10 +15,17 @@ export {
 export { pathPayment, pathPaymentStrictReceive, findPaths } from "./stellar/path-payment.js";
 export { KNOWN_ASSETS, getAsset, getNativeAsset } from "./stellar/assets.js";
 export {
+  formatAsset,
+  isNativeAsset,
+  parseAsset,
+} from "./stellar/asset-utils.js";
+export {
   changeTrust,
   claimClaimableBalance,
+  createClaimableBalance,
   mergeAccount,
   type ClaimClaimableBalanceOpts,
+  type CreateClaimableBalanceOpts,
   type MergeAccountOpts,
   type TrustlineOpts,
 } from "./stellar/account-helpers.js";
