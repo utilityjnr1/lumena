@@ -153,6 +153,41 @@ The helper returns `false` for malformed signatures or when the signature does n
 
 ## Authentication & Security
 
+### HTTP Security Headers
+
+The server applies [Helmet](https://helmetjs.github.io/) to every response, setting a
+baseline of HTTP security headers before any other middleware runs. The default headers
+include:
+
+| Header | Purpose |
+|---|---|
+| `Strict-Transport-Security` | Forces browsers to use HTTPS for future requests (`max-age=15552000; includeSubDomains`). |
+| `X-Content-Type-Options` | Set to `nosniff` to prevent MIME-type sniffing. |
+| `X-Frame-Options` | Set to `SAMEORIGIN` to mitigate clickjacking. |
+| `Content-Security-Policy` | Restricts the sources from which scripts, styles, and other resources may be loaded. |
+| `X-DNS-Prefetch-Control`, `X-Download-Options`, `X-Permitted-Cross-Domain-Policies`, `Referrer-Policy`, `Cross-Origin-*` | Additional hardening headers applied by Helmet's defaults. |
+
+Customize or disable individual headers via the `helmetOptions` option in `ServerOpts`
+(any valid Helmet configuration is accepted):
+
+```typescript
+import { createServer } from "@lumen/server";
+
+const { app } = createServer({
+  // ...
+  helmetOptions: {
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+      },
+    },
+    // Disable a specific header by setting it to false
+    frameguard: false,
+  },
+});
+```
+
 ### CORS
 Cross-origin access is disabled by default. Configure the `cors` option in `ServerOpts` to allow only the origins your application uses:
 
