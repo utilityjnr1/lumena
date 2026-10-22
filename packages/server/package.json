@@ -27,7 +27,7 @@
     "@lumen/types": "workspace:*",
     "@prisma/client": "^6.2.1",
     "@stellar/stellar-sdk": "^17.0.1",
-    "bullmq": "^5.34.0",
+    "bullmq": "^6.3.17",
     "cors": "2.8.5",
     "express": "^5.1.0",
     "express-rate-limit": "^8.7.0",
