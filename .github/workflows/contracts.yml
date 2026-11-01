@@ -180,14 +180,14 @@ jobs:
           done
 
       - name: Upload WASM artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: contracts-wasm
           path: artifacts/wasm/*.wasm
           if-no-files-found: error
 
       - name: Upload TypeScript interface definitions
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: contracts-typescript
           path: artifacts/typescript/**
