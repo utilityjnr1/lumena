@@ -1,5 +1,6 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import mermaid from 'astro-mermaid';
 import { fileURLToPath } from 'node:url';
 
 // https://astro.build/config
@@ -10,6 +11,13 @@ export default defineConfig({
   publicDir: './public',
   srcDir: './src',
   integrations: [
+    // Render Mermaid diagrams (C4 context/container and sequence diagrams)
+    // in the built docs site. GitHub renders the same ```mermaid blocks natively.
+    mermaid({
+      theme: 'neutral',
+      autoTheme: true,
+      enableLog: false,
+    }),
     starlight({
       title: 'Lumen Documentation',
       description:

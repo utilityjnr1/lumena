@@ -7,6 +7,81 @@ Lumen removes gas friction from Stellar transactions:
 3. The server signs as the fee payer and submits to the network.
 4. The user's account never holds or expends XLM for transaction fees.
 
+## System Context
+
+\`\`\`mermaid
+C4Context
+    title System Context - Lumen Gasless Transactions
+
+    Person(user, "User", "Signs inner transactions with fee = 0")
+    System(dapp, "dApp", "Integrates Lumen SDKs to submit gasless transactions")
+    System(lumen, "Lumen Server", "Co-signs, fee-bumps and submits transactions")
+    System_Ext(horizon, "Stellar Horizon", "Accepts and submits transaction envelopes")
+    System_Ext(paymaster, "Paymaster Contract", "On-chain Soroban fee credit ledger")
+
+    Rel(user, dapp, "Uses")
+    Rel(dapp, lumen, "Submits inner transaction")
+    Rel(lumen, horizon, "Submits fee-bump transaction")
+    Rel(dapp, paymaster, "Deposits and sponsors invocations")
+    Rel(paymaster, horizon, "Soroban invocation fees")
+\`\`\`
+
+## Containers
+
+\`\`\`mermaid
+C4Container
+    title Container Diagram - Lumen Server
+
+    Person(user, "User", "End user of a gasless dApp")
+    Container(webSdk, "web-sdk", "TypeScript", "Builds and signs inner transactions")
+    Container(react, "react", "React", "Hooks and components for gasless UX")
+    Container(cosigner, "Cosigner Service", "Node.js", "Evaluates policy and co-signs inner transactions")
+    Container(feeSponsor, "Fee Sponsor Service", "Node.js", "Wraps in FeeBumpTransaction, signs and submits")
+    Container(policy, "Policy Engine", "Node.js", "Enforces per-account and per-operation rules")
+    System_Ext(horizon, "Stellar Horizon", "Network submission and sequence numbers")
+
+    Rel(user, react, "Interacts with")
+    Rel(react, webSdk, "Uses")
+    Rel(webSdk, cosigner, "Requests co-sign")
+    Rel(cosigner, policy, "Evaluates policy")
+    Rel(cosigner, feeSponsor, "Hands off signed inner tx")
+    Rel(feeSponsor, horizon, "Submits fee-bump transaction")
+\`\`\`
+
+## Cosign + Fee-Bump Sequence
+
+\`\`\`mermaid
+sequenceDiagram
+    autonumber
+    participant Client as web-sdk / react
+    participant Cosigner as Cosigner Service
+    participant Policy as Policy Engine
+    participant Sponsor as Fee Sponsor Service
+    participant Horizon as Stellar Horizon
+
+    Client->>Cosigner: POST /cosign (inner tx, fee = 0)
+    Cosigner->>Policy: evaluate(inner tx)
+    Policy-->>Cosigner: allow / deny
+    alt policy denied
+        Cosigner-->>Client: 403 policy violation
+    else policy allowed
+        Cosigner->>Cosigner: allocate sequence number
+        Cosigner->>Cosigner: co-sign inner transaction
+        Cosigner->>Sponsor: signed inner transaction
+        Sponsor->>Sponsor: wrapFeeBump(inner tx)
+        Sponsor->>Sponsor: signer.sign(fee bump)
+        Sponsor->>Horizon: submit(fee bump tx)
+        alt txBAD_SEQ
+            Horizon-->>Sponsor: txBAD_SEQ
+            Sponsor->>Cosigner: refresh sequence
+            Cosigner->>Cosigner: reallocate sequence and re-sign
+            Sponsor->>Horizon: resubmit(fee bump tx)
+        end
+        Horizon-->>Sponsor: result
+        Sponsor-->>Client: submission result
+    end
+\`\`\`
+
 ## On-Chain Paymaster Contract
 
 While the fee-bump flow above sponsors classic Stellar transaction envelope fees off-chain, Soroban contract invocations consume CPU and memory resource fees that are better handled on-chain. The Paymaster contract (located in \`contracts/paymaster/\`) provides an on-contract fee credit ledger that lets dApps sponsor Soroban contract user invocations.

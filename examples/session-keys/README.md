@@ -1,10 +1,10 @@
 # Lumen Session Keys Demo
 
+## Overview
+
 An interactive **Vite + React** application demonstrating Lumen's **session key** pattern — enabling instant micropayments and rapid actions without displaying a wallet signing prompt for every transaction.
 
----
-
-## 🌟 What This Demo Shows
+### What This Demo Shows
 
 | Feature | Description |
 | --- | --- |
@@ -33,12 +33,21 @@ For a detailed walkthrough see [docs/guides/gasless-transactions.md](../../docs/
 
 ---
 
-## 🚀 Quickstart
-
-### Prerequisites
+## Prerequisites
 
 - Node.js 20+
 - pnpm
+- The `@lumen/server` co-signer running locally (see below)
+
+## Install
+
+From the repository root:
+
+```bash
+pnpm install
+```
+
+## Run
 
 ### 1. Start `@lumen/server`
 
@@ -56,7 +65,7 @@ The server starts on `http://localhost:3000`.
 pnpm --filter session-keys dev
 ```
 
-Navigate to **`http://localhost:5174`** in your browser.
+Navigate to **`http://localhost:5174`** in your browser (the dev server port is set in `vite.config.ts`).
 
 ### 3. Walk through the demo
 
@@ -65,6 +74,18 @@ Navigate to **`http://localhost:5174`** in your browser.
 3. **Send instant micropayments** — click "⚡ Tip 0.1 XLM" repeatedly. Each tap sends 0.1 XLM with no signing prompt. Watch the spend allowance bar fill up.
 4. **Observe expiry** — the countdown timer shows remaining session validity. The key expires automatically after 5 minutes.
 5. **Revoke manually** — click "Revoke Session Key" to invalidate the session key before it expires.
+
+## Expected Output
+
+- The wallet panel shows a funded, sponsored account after "Create Seedless Wallet".
+- After "Create Session Key", the countdown timer starts at 5:00 and the spend allowance bar shows 0 / 10 XLM used.
+- Each "⚡ Tip 0.1 XLM" tap sends instantly with no signing prompt; the allowance bar advances by 0.1 XLM per tap.
+- The event log records each action (session created, payment sent, revocation, errors).
+- When the timer reaches 0:00 or "Revoke Session Key" is clicked, further tips are rejected and the log shows the session as expired/revoked.
+
+## Screenshots
+
+_Add screenshots of the wallet panel, active session key with countdown, and the event log here._
 
 ---
 
@@ -85,7 +106,7 @@ examples/session-keys/
 
 ---
 
-## 🔗 Related Packages
+## Related Packages
 
 | Package | Role |
 | --- | --- |
@@ -96,8 +117,9 @@ examples/session-keys/
 
 ---
 
-## 📖 Further Reading
+## Further Reading
 
+- [Examples index](../README.md)
 - [Lumen README](../../README.md)
 - [docs/guides/gasless-transactions.md](../../docs/guides/gasless-transactions.md)
 - [Session Keys & Scoped Temporary Delegation (Issue #11)](https://github.com/utilityjnr1/lumena/issues/11)

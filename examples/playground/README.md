@@ -1,5 +1,7 @@
 # Lumen Playground Example App
 
+## Overview
+
 An interactive Vite + React demonstration application showcasing **seedless wallet onboarding**, **gasless transaction signing**, and **spend limit policy enforcement** powered by `@lumen/web-sdk` and `@lumen/server`.
 
 ---
@@ -14,26 +16,48 @@ An interactive Vite + React demonstration application showcasing **seedless wall
 
 ---
 
-## 🚀 Quickstart & Setup Guide
+## Prerequisites
 
-### 1. Prerequisites
-Ensure you have `pnpm` installed at the root of the workspace.
+- Node.js 18+ and `pnpm` installed at the root of the workspace.
+- Dependencies installed from the repository root:
+  ```bash
+  pnpm install
+  ```
 
-### 2. Start `@lumen/server`
+---
+
+## Install & Run
+
+### 1. Start `@lumen/server`
 Before launching the playground, start the co-signer and fee sponsor server:
 ```bash
 pnpm --filter @lumen/server dev
 ```
 The server will start listening on `http://localhost:3000`.
 
-### 3. Start Playground Development Server
+### 2. Start Playground Development Server
 In a separate terminal, launch the playground app:
 ```bash
 pnpm --filter playground dev
 ```
 
-### 4. Open in Browser
+### 3. Open in Browser
 Navigate to `http://localhost:5173` to test and interact with the application.
+
+---
+
+## Expected Output
+
+- The `@lumen/server` terminal logs that the co-signer and fee sponsor are listening on `http://localhost:3000`.
+- The playground terminal prints the Vite dev server URL (`http://localhost:5173`).
+- Opening the browser shows the playground UI with the wallet onboarding, balance inspector, payment, and policy controls.
+- The live log inspector displays transaction XDRs, co-sign responses, and server policy evaluations as you interact with the app.
+
+---
+
+## Screenshots
+
+_No screenshots are checked in yet. Add images under `examples/playground/docs/` and reference them here._
 
 ---
 

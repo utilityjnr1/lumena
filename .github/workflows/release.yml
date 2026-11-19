@@ -41,6 +41,98 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install oasdiff
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/oasdiff/oasdiff/main/install.sh | sh -s -- -b "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Diff OpenAPI spec against previous release
+        id: openapi-diff
+        run: |
+          set -euo pipefail
+
+          SPEC="docs/openapi.yaml"
+          CHANGELOG="docs/api-changelog.md"
+
+          if [ ! -f "$SPEC" ]; then
+            echo "No OpenAPI spec found at $SPEC; skipping API changelog diff."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Find the most recent release tag that contains the spec.
+          PREV_TAG="$(git tag --list 'v*' --sort=-v:refname | head -n 1 || true)"
+
+          if [ -z "$PREV_TAG" ]; then
+            echo "No previous release tag found; skipping API changelog diff."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Comparing $SPEC against $PREV_TAG"
+
+          BASE_SPEC="$(mktemp --suffix=.yaml)"
+          if ! git show "$PREV_TAG:$SPEC" > "$BASE_SPEC" 2>/dev/null; then
+            echo "Spec not present in $PREV_TAG; skipping API changelog diff."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          DIFF_OUTPUT="$(mktemp)"
+          if oasdiff diff "$BASE_SPEC" "$SPEC" --format text > "$DIFF_OUTPUT" 2>&1; then
+            DIFF_STATUS=0
+          else
+            DIFF_STATUS=$?
+          fi
+
+          if [ ! -s "$DIFF_OUTPUT" ]; then
+            echo "No OpenAPI changes detected since $PREV_TAG."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # oasdiff exits non-zero (1) when breaking changes are found; that is expected.
+          if [ "$DIFF_STATUS" -ne 0 ] && [ "$DIFF_STATUS" -ne 1 ]; then
+            echo "oasdiff failed with exit code $DIFF_STATUS"
+            cat "$DIFF_OUTPUT"
+            exit "$DIFF_STATUS"
+          fi
+
+          BREAKING_NOTE=""
+          if [ "$DIFF_STATUS" -eq 1 ]; then
+            BREAKING_NOTE="> ⚠️ **Breaking changes detected.** See the API versioning and deprecation policy in \`docs/api-changelog.md\`."
+          fi
+
+          DATE="$(date -u +%Y-%m-%d)"
+          {
+            echo ""
+            echo "## [$DATE] API changes since \`$PREV_TAG\`"
+            echo ""
+            if [ -n "$BREAKING_NOTE" ]; then
+              echo "$BREAKING_NOTE"
+              echo ""
+            fi
+            echo '```'
+            cat "$DIFF_OUTPUT"
+            echo '```'
+            echo ""
+          } >> "$CHANGELOG"
+
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Commit API changelog update
+        if: steps.openapi-diff.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/api-changelog.md
+          if git diff --cached --quiet; then
+            echo "No API changelog changes to commit."
+            exit 0
+          fi
+          git commit -m "docs: update API changelog from OpenAPI diff"
+          git push
+
       - name: Create Release Pull Request or Publish to npm
         id: changesets
         uses: changesets/action@v1
