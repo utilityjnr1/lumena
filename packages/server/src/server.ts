@@ -13,6 +13,7 @@ import {
 } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
 import {
+  Asset,
   BASE_FEE,
   Keypair,
   Operation,
@@ -58,6 +59,7 @@ import {
   WebhookRequestSchema,
   WebhookPatchSchema,
   WalletPatchSchema,
+  WalletCloseSchema,
 } from "./validation.js";
 import swaggerUi from "swagger-ui-express";
 import { openApiSpec } from "./openapi.js";
@@ -1485,6 +1487,161 @@ return 1
       }
 
       res.json(updated);
+    }),
+  );
+
+  // #586 — Wallet closure: remove the wallet's sponsored subentries (returning
+  // their reserves to the sponsor) and merge the account into a destination.
+  // The co-signer signs only after policy approval; the owner adds the final
+  // signature and submits.
+  app.post(
+    "/wallets/:address/close",
+    rbac.requirePermission("wallets:update"),
+    idempotency,
+    wrapHandler(async (req: Request, res: Response) => {
+      const address = req.params.address as string;
+      if (!StrKey.isValidEd25519PublicKey(address)) {
+        throw new ValidationError("address must be a valid Stellar public key");
+      }
+
+      const parsed = WalletCloseSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new ValidationError("Validation failed", parsed.error.flatten().fieldErrors);
+      }
+      const { destination } = parsed.data;
+      if (destination === address) {
+        throw new ValidationError("destination must differ from the wallet address");
+      }
+
+      const isNotFound = (error: unknown): boolean =>
+        (error as { response?: { status?: number } } | null)?.response?.status === 404;
+
+      const { config: requestNetwork, client: requestClient } = resolveNetworkForRequest(req);
+
+      try {
+        await requestClient.horizon.loadAccount(destination);
+      } catch (error) {
+        if (isNotFound(error)) {
+          throw new ValidationError("destination account does not exist");
+        }
+        throw error;
+      }
+
+      let account: Awaited<ReturnType<typeof requestClient.horizon.loadAccount>>;
+      try {
+        account = await requestClient.horizon.loadAccount(address);
+      } catch (error) {
+        if (isNotFound(error)) {
+          res.status(404).json({ error: "Wallet not found" });
+          return;
+        }
+        throw error;
+      }
+
+      const balances = (account.balances ?? []) as Array<{
+        asset_type: string;
+        asset_code?: string;
+        asset_issuer?: string;
+        balance: string;
+      }>;
+      const trustlines = balances.filter((b) => b.asset_type !== "native");
+      const funded = trustlines.find(
+        (b) => b.asset_type === "liquidity_pool_shares" || Number(b.balance) !== 0,
+      );
+      if (funded !== undefined) {
+        throw new ValidationError(
+          "All non-native balances must be zero before the wallet can be closed",
+        );
+      }
+
+      const reserves = await sponsorReserveService.getWalletReserves(address);
+
+      const builder = new TransactionBuilder(account, {
+        fee: BASE_FEE,
+        networkPassphrase: requestNetwork.networkPassphrase,
+      });
+      for (const name of Object.keys(account.data_attr ?? {})) {
+        builder.addOperation(Operation.manageData({ name, value: null }));
+      }
+      for (const trustline of trustlines) {
+        builder.addOperation(
+          Operation.changeTrust({
+            asset: new Asset(trustline.asset_code as string, trustline.asset_issuer),
+            limit: "0",
+          }),
+        );
+      }
+      const signers = (account.signers ?? []) as Array<{ key: string; type: string }>;
+      for (const signer of signers) {
+        if (signer.key === address) continue;
+        if (signer.type === "ed25519_public_key") {
+          builder.addOperation(
+            Operation.setOptions({ signer: { ed25519PublicKey: signer.key, weight: 0 } }),
+          );
+        } else if (signer.type === "sha256_hash") {
+          builder.addOperation(
+            Operation.setOptions({
+              signer: { sha256Hash: StrKey.decodeSha256Hash(signer.key), weight: 0 },
+            }),
+          );
+        } else if (signer.type === "preauth_tx") {
+          builder.addOperation(
+            Operation.setOptions({
+              signer: { preAuthTx: StrKey.decodePreAuthTx(signer.key), weight: 0 },
+            }),
+          );
+        }
+      }
+      builder.addOperation(Operation.accountMerge({ destination }));
+      const closeTx = builder.setTimeout(180).build();
+      const txHash = closeTx.hash().toString("hex");
+
+      const result = policyEngine.evaluateWithAudit({
+        walletAddress: address,
+        transaction: closeTx,
+      });
+      await auditLog.append({
+        txHash,
+        walletAddress: address,
+        decision: result.approved ? "approved" : "rejected",
+        rulesEvaluated: [...(result.rulesEvaluated ?? []), "wallet:close"],
+      });
+      if (!result.approved) {
+        broadcastAuditEvent({
+          timestamp: new Date().toISOString(),
+          decision: "rejected",
+          wallet: address,
+          txHash,
+          reason: result.reason ?? "Wallet closure denied by policy",
+        });
+        throw new PolicyError(result.reason ?? "Wallet closure denied by policy");
+      }
+
+      const cosignerPublicKey = opts.cosignerSigner.publicKey();
+      if (signers.some((s) => s.key === cosignerPublicKey)) {
+        const signature = await opts.cosignerSigner.sign(closeTx.hash());
+        closeTx.signatures.push(
+          new xdr.DecoratedSignature({
+            hint: Keypair.fromPublicKey(cosignerPublicKey).rawPublicKey().slice(-4),
+            signature: Buffer.from(signature),
+          }),
+        );
+      }
+
+      broadcastAuditEvent({
+        timestamp: new Date().toISOString(),
+        decision: "approved",
+        wallet: address,
+        txHash,
+      });
+      res.json({
+        address,
+        destination,
+        txHash,
+        xdr: closeTx.toXDR(),
+        reclaimedReserves: reserves.reserves,
+        reclaimedXlm: reserves.lockedXlm,
+      });
     }),
   );
 

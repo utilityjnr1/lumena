@@ -178,6 +178,18 @@ export const WalletPatchSchema = z
 export type WalletPatch = z.infer<typeof WalletPatchSchema>;
 
 /**
+ * Schema for POST /wallets/:address/close — account that receives the
+ * remaining funds of the merged wallet.
+ */
+export const WalletCloseSchema = z.object({
+  destination: z.string().refine((val) => StrKey.isValidEd25519PublicKey(val), {
+    message: "destination must be a valid Stellar public key",
+  }),
+});
+
+export type WalletClose = z.infer<typeof WalletCloseSchema>;
+
+/**
  * Schema for GET /wallets — optional tag filter.
  */
 export const WalletListQuerySchema = z.object({
