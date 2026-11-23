@@ -9,7 +9,7 @@ use soroban_sdk::{
 #[contracttype]
 #[derive(Clone)]
 pub enum DataKey {
-    /// The admin allowed to register cosigners.
+    /// The admin allowed to manage cosigners.
     Admin,
     /// Registered cosigner public keys keyed by index.
     Cosigner(u32),
@@ -46,6 +46,7 @@ pub enum Error {
     HighS = 10,
     NonCanonical = 11,
     LengthMismatch = 12,
+    DuplicateCosigner = 13,
 }
 
 /// secp256k1 group order divided by two (low-S bound).
@@ -90,45 +91,79 @@ impl MpcVerifier {
             _ => panic_with_error!(&env, Error::InvalidScheme),
         };
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::Threshold, &threshold);
+        env.storage()
+            .instance()
+            .set(&DataKey::Threshold, &threshold);
         env.storage().instance().set(&DataKey::Scheme, &scheme);
         env.storage().instance().set(&DataKey::CosignerCount, &0u32);
     }
 
     /// Register a cosigner public key at the next available index.
     pub fn register_cosigner(env: Env, admin: Address, pubkey: BytesN<32>) -> u32 {
-        admin.require_auth();
-        let stored_admin: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .unwrap_or_else(|| panic_with_error!(&env, Error::NotInitialized));
-        if admin != stored_admin {
-            panic_with_error!(&env, Error::Unauthorized);
+        Self::require_admin(&env, &admin);
+        let count = Self::cosigner_count(env.clone());
+        let storage = env.storage().persistent();
+        for index in 0..count {
+            let registered: Option<BytesN<32>> = storage.get(&DataKey::Cosigner(index));
+            if registered.as_ref() == Some(&pubkey) {
+                panic_with_error!(&env, Error::DuplicateCosigner);
+            }
         }
-        let mut count: u32 = env
-            .storage()
-            .instance()
-            .get(&DataKey::CosignerCount)
-            .unwrap_or(0);
+        storage.set(&DataKey::Cosigner(count), &pubkey);
+        let new_count = count + 1;
         env.storage()
-            .persistent()
-            .set(&DataKey::Cosigner(count), &pubkey);
-        count += 1;
-        env.storage().instance().set(&DataKey::CosignerCount, &count);
-        count
+            .instance()
+            .set(&DataKey::CosignerCount, &new_count);
+        new_count
+    }
+
+    /// Remove a cosigner. If the removed index is not last, the last cosigner
+    /// moves to that index. Build subsequent bitmaps using the updated indexes.
+    pub fn remove_cosigner(env: Env, admin: Address, index: u32) {
+        Self::require_admin(&env, &admin);
+        let count = Self::cosigner_count(env.clone());
+        if index >= count {
+            panic_with_error!(&env, Error::UnknownCosigner);
+        }
+        let last_index = count - 1;
+        if last_index < Self::threshold(env.clone()) {
+            panic_with_error!(&env, Error::InvalidThreshold);
+        }
+
+        let storage = env.storage().persistent();
+        let last_key = DataKey::Cosigner(last_index);
+        if index != last_index {
+            let pubkey: BytesN<32> = storage
+                .get(&last_key)
+                .unwrap_or_else(|| panic_with_error!(&env, Error::UnknownCosigner));
+            storage.set(&DataKey::Cosigner(index), &pubkey);
+        }
+        storage.remove(&last_key);
+        env.storage()
+            .instance()
+            .set(&DataKey::CosignerCount, &last_index);
     }
 
     /// Update the threshold. Only admin may call.
     pub fn set_threshold(env: Env, admin: Address, threshold: u32) {
+        Self::require_admin(&env, &admin);
+        if threshold == 0 {
+            panic_with_error!(&env, Error::InvalidThreshold);
+        }
+        env.storage()
+            .instance()
+            .set(&DataKey::Threshold, &threshold);
+    }
+
+    fn require_admin(env: &Env, admin: &Address) {
         admin.require_auth();
         let stored_admin: Address = env
             .storage()
             .instance()
             .get(&DataKey::Admin)
-            .unwrap_or_else(|| panic_with_error!(&env, Error::NotInitialized));
-        if admin != stored_admin {
-            panic_with_error!(&env, Error::Unauthorized);
+            .unwrap_or_else(|| panic_with_error!(env, Error::NotInitialized));
+        if admin != &stored_admin {
+            panic_with_error!(env, Error::Unauthorized);
         }
         let cosigner_count: u32 = env
             .storage()
@@ -282,14 +317,9 @@ impl MpcVerifier {
         // For the contract-level check we verify against the aggregated key
         // stored under the reserved key. If no aggregated key is present we
         // fall back to verifying the signature structure only.
-        let agg_key: Option<BytesN<32>> = env
-            .storage()
-            .instance()
-            .get(&symbol_short!("aggkey"));
+        let agg_key: Option<BytesN<32>> = env.storage().instance().get(&symbol_short!("aggkey"));
         match agg_key {
-            Some(pubkey) => env
-                .crypto()
-                .ed25519_verify(&pubkey, message, signature),
+            Some(pubkey) => env.crypto().ed25519_verify(&pubkey, message, signature),
             None => {
                 // Without an aggregated key we cannot perform full verification.
                 // Reject to avoid accepting unverifiable signatures.
